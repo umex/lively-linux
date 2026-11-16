@@ -4,7 +4,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using lively.Common;
-using lively.Common.Helpers.MVVM;
+using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace lively.Models
 {

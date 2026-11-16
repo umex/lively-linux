@@ -1,4 +1,4 @@
-﻿using ICSharpCode.SharpZipLib.Core;
+using ICSharpCode.SharpZipLib.Core;
 using ICSharpCode.SharpZipLib.Zip;
 using System;
 using System.Collections.Generic;
@@ -20,6 +20,12 @@ namespace lively.Common.Helpers.Archive
         /// <param name="livelyFileCheck">Verify whether the archive is lively wallpaper format, throws Exception if not.</param>
         public static void ZipExtractFile(string archivePath, string outFolder, bool livelyFileCheck)
         {
+            var outRoot = Path.GetFullPath(outFolder);
+            if (!outRoot.EndsWith(Path.DirectorySeparatorChar.ToString()))
+            {
+                outRoot += Path.DirectorySeparatorChar;
+            }
+
             using (Stream fsInput = File.OpenRead(archivePath))
             using (var zf = new ZipFile(fsInput))
             {
@@ -50,7 +56,12 @@ namespace lively.Common.Helpers.Archive
                     // The unpacked length is available in the zipEntry.Size property.
 
                     // Manipulate the output filename here as desired.
-                    var fullZipToPath = Path.Combine(outFolder, entryFileName);
+                    var fullZipToPath = Path.GetFullPath(Path.Combine(outRoot, entryFileName));
+                    if (!fullZipToPath.StartsWith(outRoot, StringComparison.Ordinal))
+                    {
+                        // Entry such as "../file" or an absolute path would be written outside the destination.
+                        throw new InvalidDataException("Zip entry is outside the destination folder: " + entryFileName);
+                    }
                     var directoryName = Path.GetDirectoryName(fullZipToPath);
                     if (directoryName.Length > 0)
                     {

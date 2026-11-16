@@ -1,7 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
 using lively.Common.Helpers;
 
 namespace lively.Views.Pages
@@ -13,12 +11,7 @@ namespace lively.Views.Pages
             InitializeComponent();
         }
 
-        private void InitializeComponent()
-        {
-            AvaloniaXamlLoader.Load(this);
-        }
-
-        private void OnSrcButtonClick(object sender, RoutedEventArgs e)
+        private void OnSrcButtonClick(object? sender, RoutedEventArgs e)
         {
             LinkHandler.OpenBrowser("https://github.com/rocksdanister/lively");
         }

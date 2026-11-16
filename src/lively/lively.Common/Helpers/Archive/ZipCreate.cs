@@ -1,4 +1,4 @@
-﻿using ICSharpCode.SharpZipLib.Core;
+using ICSharpCode.SharpZipLib.Core;
 using ICSharpCode.SharpZipLib.Zip;
 using System;
 using System.Collections.Generic;
@@ -13,6 +13,11 @@ namespace lively.Common.Helpers.Archive
         {
             public List<string> Files { get; set; }
             public string ParentDirectory { get; set; }
+        }
+
+        private static bool EndsWithDirectorySeparator(string path)
+        {
+            return path.EndsWith(Path.DirectorySeparatorChar.ToString()) || path.EndsWith(Path.AltDirectorySeparatorChar.ToString());
         }
 
         /// <summary>
@@ -31,7 +36,7 @@ namespace lively.Common.Helpers.Archive
                 for (int i = 0; i < folders.Count; i++)
                 {
                     var folder = folders[i];
-                    int folderOffset = folder.Length + (folder.EndsWith("\\") ? 0 : 1);
+                    int folderOffset = folder.Length + (EndsWithDirectorySeparator(folder) ? 0 : 1);
                     var files = Directory.GetFiles(folder, "*.*", SearchOption.AllDirectories);
                     for (int j = 0; j < files.Length; j++)
                     {
@@ -110,7 +115,7 @@ namespace lively.Common.Helpers.Archive
                 for (int i = 0; i < fileData.Count; i++)
                 {
                     var item = fileData[i];
-                    int folderOffset = item.ParentDirectory.Length + (item.ParentDirectory.EndsWith("\\") ? 0 : 1);
+                    int folderOffset = item.ParentDirectory.Length + (EndsWithDirectorySeparator(item.ParentDirectory) ? 0 : 1);
                     for (int j = 0; j < item.Files.Count; j++)
                     {
                         var file = item.Files[j];

@@ -1,6 +1,5 @@
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Markup.Xaml;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace lively.Views.Pages
 {
@@ -9,12 +8,10 @@ namespace lively.Views.Pages
         public LibraryPage()
         {
             InitializeComponent();
-            this.DataContext = new LibraryViewModel();
-        }
-
-        private void InitializeComponent()
-        {
-            AvaloniaXamlLoader.Load(this);
+            if (!Design.IsDesignMode)
+            {
+                DataContext = App.Services.GetRequiredService<LibraryViewModel>();
+            }
         }
     }
 }

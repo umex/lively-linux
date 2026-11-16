@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Data.Converters;
 using Avalonia.Media.Imaging;
 using System;
@@ -13,7 +13,7 @@ namespace lively.Helpers.MVVM
     {
         public static BitmapAssetValueConverter Instance = new BitmapAssetValueConverter();
 
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
+        public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             //return new Bitmap((string)value);
             try
@@ -29,7 +29,7 @@ namespace lively.Helpers.MVVM
             return null;
         }
 
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
+        public object? ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
         {
             throw new NotSupportedException();
         }
