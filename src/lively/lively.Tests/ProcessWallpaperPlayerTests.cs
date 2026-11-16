@@ -1,0 +1,264 @@
+using System.Diagnostics;
+using lively.Common;
+using lively.Core;
+using lively.Core.Desktop;
+using lively.Core.Wallpapers;
+using lively.Models.Message;
+
+namespace lively.Tests;
+
+public class ProcessWallpaperPlayerTests
+{
+    [Fact]
+    public void Resolver_FindsTheDummyNextToTheTests()
+    {
+        var launch = DummyPlayer.Launch("--x");
+
+        Assert.Contains(WallpaperPlayerFactory.DummyPlayerName, string.Join(' ', [launch.FileName, .. launch.Arguments]));
+        Assert.Equal("--x", launch.Arguments[^1]);
+    }
+
+    [Fact]
+    public void Resolver_MissingExecutable_Throws()
+    {
+        using var tmp = new TempDirectory();
+
+        Assert.Throws<FileNotFoundException>(() => PlayerExecutableResolver.Resolve(tmp.Path, "no-such-player", []));
+    }
+
+    [Fact]
+    public void Resolver_FallsBackToDotnetDll()
+    {
+        using var tmp = new TempDirectory();
+        tmp.WriteFile("", "some-player.dll");
+
+        var launch = PlayerExecutableResolver.Resolve(tmp.Path, "some-player", ["--a"]);
+
+        Assert.Equal("dotnet", Path.GetFileNameWithoutExtension(launch.FileName));
+        Assert.Equal([tmp.Combine("some-player.dll"), "--a"], launch.Arguments);
+    }
+
+    [Fact]
+    public async Task ShowAsync_WaitsForLoaded()
+    {
+        using var tmp = new TempDirectory();
+        using var player = DummyPlayer.Create(tmp, args: ["--dummy-load-delay", "100", "--wallpaper-display", "DP-1"]);
+        var console = new ConsoleRecorder(player);
+        var loaded = 0;
+        player.Loaded += (_, _) => loaded++;
+
+        await player.ShowAsync();
+
+        Assert.True(player.IsLoaded);
+        Assert.False(player.IsExited);
+        Assert.NotNull(player.Pid);
+        Assert.Equal(1, loaded);
+        Assert.StartsWith("started", Assert.Single(console.Messages));
+    }
+
+    [Fact]
+    public async Task Commands_ReachThePlayer()
+    {
+        using var tmp = new TempDirectory();
+        var log = tmp.Combine("dummy.log");
+        using var player = DummyPlayer.Create(tmp, args: ["--dummy-load-delay", "0", "--dummy-log", log]);
+        var console = new ConsoleRecorder(player);
+        await player.ShowAsync();
+
+        player.Pause();
+        player.Play();
+        player.SetVolume(30);
+        player.SetMute(true);
+        player.SetMute(true); // no-op
+        player.SetMute(false);
+        player.SendMessage(new LivelyReloadCmd());
+
+        string[] expected = ["received cmd_suspend", "received cmd_resume", "received cmd_volume", "received cmd_volume", "received cmd_volume", "received cmd_reload"];
+        console.WaitFor(m => m.Count >= 1 + expected.Length, "all commands echoed.");
+        Assert.Equal(expected, console.Messages.Skip(1));
+        var volumes = File.ReadAllLines(log).Where(l => l.Contains("received cmd_volume")).Select(l => l.Split(' ')[^1]);
+        Assert.Equal(["30", "0", "30"], volumes);
+    }
+
+    [Fact]
+    public async Task CloseAsync_ExitsCleanlyAndRaisesExitedOnce()
+    {
+        using var tmp = new TempDirectory();
+        using var player = DummyPlayer.Create(tmp, args: ["--dummy-load-delay", "0"]);
+        var exited = 0;
+        player.Exited += (_, _) => Interlocked.Increment(ref exited);
+        await player.ShowAsync();
+
+        var sw = Stopwatch.StartNew();
+        await player.CloseAsync();
+
+        Assert.True(player.IsExited);
+        Assert.Equal(0, player.ExitCode);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(3), "closed by cmd_close, not by the kill timeout");
+        await player.CloseAsync(); // second close is a no-op
+        player.Pause(); // dropped, no exception
+        Assert.Equal(1, exited);
+    }
+
+    [Fact]
+    public async Task Hang_TimesOutAndKills()
+    {
+        using var tmp = new TempDirectory();
+        using var player = DummyPlayer.Create(tmp, loadTimeout: TimeSpan.FromMilliseconds(700), args: ["--dummy-hang"]);
+
+        var e = await Assert.ThrowsAsync<WallpaperPlayerException>(() => player.ShowAsync());
+
+        Assert.Contains("did not load", e.Message);
+        await Wait.UntilAsync(() => player.IsExited, "player killed after the timeout");
+        Assert.False(player.IsLoaded);
+    }
+
+    [Fact]
+    public async Task Fail_ThrowsAndExits()
+    {
+        using var tmp = new TempDirectory();
+        using var player = DummyPlayer.Create(tmp, args: ["--dummy-load-delay", "0", "--dummy-fail"]);
+
+        var e = await Assert.ThrowsAsync<WallpaperPlayerException>(() => player.ShowAsync());
+
+        Assert.Contains("failed to load", e.Message);
+        await Wait.UntilAsync(() => player.IsExited, "player exited");
+    }
+
+    [Fact]
+    public async Task EarlyExit_Throws()
+    {
+        using var tmp = new TempDirectory();
+        var launch = new PlayerLaunchInfo("/bin/sh", ["-c", "exit 3"]);
+        using var player = new ProcessWallpaperPlayer(launch, DummyPlayer.Model(tmp), DummyPlayer.Display(), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(1));
+
+        var e = await Assert.ThrowsAsync<WallpaperPlayerException>(() => player.ShowAsync());
+
+        Assert.Contains("code 3", e.Message);
+        Assert.True(player.IsExited);
+    }
+
+    [Fact]
+    public async Task MissingExecutable_Throws()
+    {
+        using var tmp = new TempDirectory();
+        var launch = new PlayerLaunchInfo(tmp.Combine("does-not-exist"), []);
+        using var player = new ProcessWallpaperPlayer(launch, DummyPlayer.Model(tmp), DummyPlayer.Display(), TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(1));
+
+        await Assert.ThrowsAsync<WallpaperPlayerException>(() => player.ShowAsync());
+    }
+
+    [Fact]
+    public async Task Cancel_KillsAndThrows()
+    {
+        using var tmp = new TempDirectory();
+        using var player = DummyPlayer.Create(tmp, args: ["--dummy-hang"]);
+        using var cts = new CancellationTokenSource(TimeSpan.FromMilliseconds(300));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => player.ShowAsync(cts.Token));
+        await Wait.UntilAsync(() => player.IsExited, "player killed after cancel");
+    }
+
+    [Fact]
+    public async Task UnexpectedExit_RaisesExited()
+    {
+        using var tmp = new TempDirectory();
+        using var player = DummyPlayer.Create(tmp, args: ["--dummy-load-delay", "0"]);
+        using var exited = new SemaphoreSlim(0);
+        player.Exited += (_, _) => exited.Release();
+        await player.ShowAsync();
+
+        Process.GetProcessById(player.Pid!.Value).Kill();
+
+        Assert.True(await exited.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.True(player.IsExited);
+    }
+
+    [Fact]
+    public async Task CloseAsync_KillsAPlayerThatIgnoresClose()
+    {
+        using var tmp = new TempDirectory();
+        // Reports loaded, then ignores stdin and SIGTERM; its child "sleep" must die with it.
+        var script = "trap '' TERM; echo '{\"Type\":2,\"Success\":true}'; sleep 30 & echo $! > " + tmp.Combine("child.pid") + "; wait";
+        var launch = new PlayerLaunchInfo("/bin/sh", ["-c", script]);
+        using var player = new ProcessWallpaperPlayer(launch, DummyPlayer.Model(tmp), DummyPlayer.Display(), TimeSpan.FromSeconds(10), TimeSpan.FromMilliseconds(300));
+        await player.ShowAsync();
+        await Wait.UntilAsync(() => File.Exists(tmp.Combine("child.pid")) && File.ReadAllText(tmp.Combine("child.pid")).Trim().Length > 0, "child pid written");
+        var childPid = int.Parse(File.ReadAllText(tmp.Combine("child.pid")).Trim());
+
+        await player.CloseAsync();
+
+        Assert.True(player.IsExited);
+        Assert.NotEqual(0, player.ExitCode);
+        await Wait.UntilAsync(() => !IsRunning(childPid), "child process killed with the player");
+    }
+
+    [Fact]
+    public void Dummy_ExitsOnStdinEof()
+    {
+        var launch = DummyPlayer.Launch("--dummy-load-delay", "0");
+        var psi = new ProcessStartInfo(launch.FileName) { RedirectStandardInput = true, RedirectStandardOutput = true, UseShellExecute = false };
+        foreach (var a in launch.Arguments)
+        {
+            psi.ArgumentList.Add(a);
+        }
+        using var p = Process.Start(psi)!;
+        Assert.Contains("\"Type\":1", p.StandardOutput.ReadLine());
+        Assert.Equal("{\"Type\":2,\"Success\":true}", p.StandardOutput.ReadLine());
+
+        p.StandardInput.Close();
+
+        Assert.True(p.WaitForExit(5000));
+        Assert.Equal(0, p.ExitCode);
+    }
+
+    [Fact]
+    public async Task Factory_LaunchesDummyWithWallpaperArguments()
+    {
+        using var tmp = new TempDirectory();
+        var options = new CoreOptions { PlayerLogDirectory = tmp.Combine("logs") };
+        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"));
+        var factory = new WallpaperPlayerFactory(options, backend);
+        var model = DummyPlayer.Model(tmp);
+
+        using var player = factory.Create(model, DummyPlayer.Display("DP-2"));
+        var console = new ConsoleRecorder(player);
+        await player.ShowAsync();
+        await player.CloseAsync();
+
+        var started = console.Messages[0];
+        Assert.Contains("--wallpaper-url " + model.FilePath, started);
+        Assert.Contains("--wallpaper-type video", started);
+        Assert.Contains("--wallpaper-display DP-2", started);
+        Assert.Contains("--wallpaper-geometry 1920x1080", started);
+        Assert.Contains("--wallpaper-output DP-2", started);
+        var log = File.ReadAllText(Path.Combine(options.PlayerLogDirectory, "player-dummy-DP-2.log"));
+        Assert.Contains("loaded " + model.FilePath + " (video) on DP-2 1920x1080", log);
+        Assert.Contains("exiting: cmd_close", log);
+    }
+
+    [Fact]
+    public void Factory_MissingWallpaperFile_Throws()
+    {
+        using var tmp = new TempDirectory();
+        var model = DummyPlayer.Model(tmp);
+        File.Delete(Path.Combine(model.LivelyInfoFolderPath, "wallpaper.mp4"));
+        model = Core.Library.LibraryScanner.ScanFolder(model.LivelyInfoFolderPath)!;
+        var factory = new WallpaperPlayerFactory(new CoreOptions(), new NullDesktopBackend(new DesktopSession(SessionType.Unknown, DesktopEnvironment.Unknown, null)));
+
+        Assert.Throws<WallpaperPlayerException>(() => factory.Create(model, DummyPlayer.Display()));
+    }
+
+    private static bool IsRunning(int pid)
+    {
+        try
+        {
+            using var p = Process.GetProcessById(pid);
+            return !p.HasExited;
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+}
