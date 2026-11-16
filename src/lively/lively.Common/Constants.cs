@@ -54,10 +54,18 @@ namespace lively.Common
             }
         }
 
-        public static class SingleInstance
+        /// <summary>
+        /// Session bus names. Owning a bus name is also the single-instance lock.
+        /// </summary>
+        public static class DBus
         {
-            public static string UniqueAppName { get; } = "LIVELY:DESKTOPWALLPAPERSYSTEM";
-            public static string PipeServerName { get; } = UniqueAppName + Environment.UserName;
+            public const string DaemonBusName = "io.github.lively_linux.Daemon";
+            public const string CoreObjectPath = "/io/github/lively_linux/Core";
+            public const string CoreInterface = "io.github.lively_linux.Core1";
+            public const string UiBusName = "io.github.lively_linux.Lively";
+            public const string UiObjectPath = "/io/github/lively_linux/Lively";
+            /// <summary>Followed by WallpaperNotFound, DisplayNotFound, PlayerFailed or InvalidSettings.</summary>
+            public const string ErrorPrefix = "io.github.lively_linux.Error.";
         }
         
         public static class ApplicationType
