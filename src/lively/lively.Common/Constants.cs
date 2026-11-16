@@ -13,11 +13,13 @@ namespace lively.Common
 
             // XDG base directories. .NET maps LocalApplicationData to $XDG_DATA_HOME (~/.local/share)
             // and ApplicationData to $XDG_CONFIG_HOME (~/.config); state and cache have no SpecialFolder.
+            // DoNotVerify: without it GetFolderPath returns "" for a directory that does not exist yet,
+            // which turned these paths into relative ones.
 
             /// <summary>User data: wallpaper library. ~/.local/share/lively-wallpaper</summary>
-            public static string AppDataDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppDirName);
+            public static string AppDataDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify), AppDirName);
             /// <summary>Settings files. ~/.config/lively-wallpaper</summary>
-            public static string ConfigDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), AppDirName);
+            public static string ConfigDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify), AppDirName);
             /// <summary>Logs and other state. ~/.local/state/lively-wallpaper</summary>
             public static string StateDir { get; } = Path.Combine(GetXdgDir("XDG_STATE_HOME", ".local", "state"), AppDirName);
             /// <summary>Disposable files. ~/.cache/lively-wallpaper</summary>
