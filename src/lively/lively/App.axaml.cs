@@ -8,7 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace lively
 {
-    public partial class App : Application
+    public class App : Application
     {
         /// <summary>
         /// Application services, available once framework initialization has completed.
