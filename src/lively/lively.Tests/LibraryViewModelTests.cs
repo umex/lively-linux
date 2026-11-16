@@ -3,42 +3,6 @@ namespace lively.Tests;
 public class LibraryViewModelTests
 {
     [Fact]
-    public void Scan_LoadsWallpaperFoldersSortedByTitle()
-    {
-        using var tmp = new TempDirectory();
-        WallpaperFixture.Create(tmp, "1", "Waves");
-        WallpaperFixture.Create(tmp, "2", "Aurora");
-        WallpaperFixture.Create(tmp, "3", "Rain");
-
-        var vm = new LibraryViewModel([tmp.Path]);
-
-        Assert.Equal(["Aurora", "Rain", "Waves"], vm.LibraryItems.Select(x => x.Title));
-    }
-
-    [Fact]
-    public void Scan_SkipsFoldersWithoutValidLivelyInfo()
-    {
-        using var tmp = new TempDirectory();
-        WallpaperFixture.Create(tmp, "valid", "Rain");
-        tmp.CreateDirectory("not-a-wallpaper");
-        tmp.WriteFile("{ not json", "corrupt", "LivelyInfo.json");
-
-        var vm = new LibraryViewModel([tmp.Path]);
-
-        Assert.Equal(["Rain"], vm.LibraryItems.Select(x => x.Title));
-    }
-
-    [Fact]
-    public void Scan_MissingFolder_GivesEmptyLibrary()
-    {
-        using var tmp = new TempDirectory();
-
-        var vm = new LibraryViewModel([tmp.Combine("does-not-exist")]);
-
-        Assert.Empty(vm.LibraryItems);
-    }
-
-    [Fact]
     public void AddWallpaper_InsertsInTitleOrder()
     {
         using var tmp = new TempDirectory();

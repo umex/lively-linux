@@ -20,6 +20,7 @@
   <ItemGroup>
     <ProjectReference Include="..\lively\lively.csproj" />
     <ProjectReference Include="..\lively.Common\lively.Common.csproj" />
+    <ProjectReference Include="..\lively.Core\lively.Core.csproj" />
     <ProjectReference Include="..\lively.Models\lively.Models.csproj" />
   </ItemGroup>
 

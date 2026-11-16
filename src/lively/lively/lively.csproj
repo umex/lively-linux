@@ -18,10 +18,8 @@
 		<PackageReference Include="SharpZipLib" Version="1.4.2" />
 	</ItemGroup>
 	<ItemGroup>
-		<Folder Include="Core\Display\" />
-	</ItemGroup>
-	<ItemGroup>
 	  <ProjectReference Include="..\lively.Common\lively.Common.csproj" />
+	  <ProjectReference Include="..\lively.Core\lively.Core.csproj" />
 	  <ProjectReference Include="..\lively.Models\lively.Models.csproj" />
 	</ItemGroup>
 </Project>
