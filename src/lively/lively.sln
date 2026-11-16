@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lively.Models", "lively.Mod
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lively.Tests", "lively.Tests\lively.Tests.csproj", "{24468C40-7D70-40F1-B6FC-27180CAADA86}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lively.Core", "lively.Core\lively.Core.csproj", "{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -69,6 +71,18 @@ Global
 		{24468C40-7D70-40F1-B6FC-27180CAADA86}.Release|x64.Build.0 = Release|Any CPU
 		{24468C40-7D70-40F1-B6FC-27180CAADA86}.Release|x86.ActiveCfg = Release|Any CPU
 		{24468C40-7D70-40F1-B6FC-27180CAADA86}.Release|x86.Build.0 = Release|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Debug|x64.Build.0 = Debug|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Debug|x86.Build.0 = Debug|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Release|x64.ActiveCfg = Release|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Release|x64.Build.0 = Release|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Release|x86.ActiveCfg = Release|Any CPU
+		{0BA956D7-3EE7-4C17-A698-D4C5E24117E8}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
