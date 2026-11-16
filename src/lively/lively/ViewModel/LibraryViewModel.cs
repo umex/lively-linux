@@ -1,14 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
-using lively.Helpers;
-using lively.Helpers.MVVM;
+using CommunityToolkit.Mvvm.ComponentModel;
 using lively.Common.Helpers.Storage;
-using lively.Common.Helpers.MVVM;
 using lively.Models;
 using lively.Common;
 
@@ -17,14 +15,20 @@ namespace lively
     public class LibraryViewModel : ObservableObject
     {
         private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
-        private List<string> wallpaperScanFolders = new List<string>() {
-                Path.Combine(Program.WallpaperDir, "wallpapers"),
-                Path.Combine(Program.WallpaperDir, "saveData", "wptmp")
-            };
+        private readonly List<string> wallpaperScanFolders;
 
-        public LibraryViewModel()
+        public LibraryViewModel() : this(new[] {
+                Path.Combine(Constants.CommonPaths.LibraryDir, "wallpapers"),
+                Path.Combine(Constants.CommonPaths.LibraryDir, "saveData", "wptmp")
+            })
         {
-            foreach (var item in ScanWallpaperFolders(wallpaperScanFolders))
+        }
+
+        /// <param name="wallpaperScanFolders">Parent folders whose subdirectories are wallpapers.</param>
+        public LibraryViewModel(IReadOnlyList<string> wallpaperScanFolders)
+        {
+            this.wallpaperScanFolders = wallpaperScanFolders.ToList();
+            foreach (var item in ScanWallpaperFolders(this.wallpaperScanFolders))
             {
                 LibraryItems.Add(item);
             }
@@ -36,27 +40,14 @@ namespace lively
         public ObservableCollection<LibraryModel> LibraryItems
         {
             get { return _libraryItems; }
-            set
-            {
-                if (value != _libraryItems)
-                {
-                    _libraryItems = value;
-                    OnPropertyChanged();
-                }
-            }
+            set { SetProperty(ref _libraryItems, value); }
         }
 
-        private LibraryModel _selectedItem;
-        public LibraryModel SelectedItem
+        private LibraryModel? _selectedItem;
+        public LibraryModel? SelectedItem
         {
-            get
-            {
-                return _selectedItem;
-            }
-            set
-            {
-                OnPropertyChanged();
-            }
+            get { return _selectedItem; }
+            set { SetProperty(ref _selectedItem, value); }
         }
 
         #endregion //collections
@@ -109,11 +100,11 @@ namespace lively
             return SortWallpapers(tmpLibItems);
         }
         
-        private LibraryModel ScanWallpaperFolder(string folderPath)
+        private LibraryModel? ScanWallpaperFolder(string folderPath)
         {
             if (File.Exists(Path.Combine(folderPath, "LivelyInfo.json")))
             {
-                LivelyInfoModel info = null;
+                LivelyInfoModel? info = null;
                 try
                 {
                     info = JsonStorage<LivelyInfoModel>.LoadData(Path.Combine(folderPath, "LivelyInfo.json"));
@@ -160,7 +151,7 @@ namespace lively
             }
             catch(ArgumentNullException)
             {
-                return null;
+                return data;
             }
         }
 

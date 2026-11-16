@@ -4,13 +4,16 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Class="lively.Views.Pages.LibraryPage"
-             xmlns:ext="clr-namespace:lively.Helpers.MVVM;assembly=lively">
+             xmlns:ext="clr-namespace:lively.Helpers.MVVM;assembly=lively"
+             xmlns:vm="clr-namespace:lively;assembly=lively"
+             xmlns:models="clr-namespace:lively.Models;assembly=lively.Models"
+             x:DataType="vm:LibraryViewModel">
 
   <UserControl.Resources>
     <ext:BitmapAssetValueConverter x:Key="variableImage"/>
   </UserControl.Resources>
   
-  <ListBox Items="{Binding LibraryItems}" SelectedItem="{Binding SelectedItem}" Background="Transparent">
+  <ListBox ItemsSource="{Binding LibraryItems}" SelectedItem="{Binding SelectedItem}" Background="Transparent">
     <ListBox.Styles>
       <Style Selector="ListBoxItem">
         <Setter Property="Padding" Value="2.5"/>
@@ -33,7 +36,7 @@
       </ItemsPanelTemplate>
     </ItemsControl.ItemsPanel>
     <ListBox.ItemTemplate>
-      <DataTemplate>
+      <DataTemplate x:DataType="models:LibraryModel">
         <Grid Width="272" Height="153">
           <Image Source="{Binding ImagePath, Converter={StaticResource variableImage}}"
             Stretch="UniformToFill"/>

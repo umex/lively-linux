@@ -19,9 +19,11 @@
 
 ## Progress
 
-The project is in it's very early stages and <br>
+The project is in its very early stages and <br>
 wallpapers do not work yet, however the <br>
 basic user interface works by now.
+
+See the **[Revival Plan]** for the roadmap.
 
 <br>
 
@@ -29,7 +31,7 @@ basic user interface works by now.
 
 *Everything is subject to change.*
 
-- Language / Runtime : **[.NET 5 SDK]**
+- Language / Runtime : **[.NET 10 SDK]**
 
 - Video Player : **[MPV]** / **[MPV.Net]**
 
@@ -46,21 +48,35 @@ basic user interface works by now.
 
 Wallpapers are saved in:
 
-`<app_folder>/userdata/library/wallpapers`
+`~/.local/share/lively-wallpaper/library/wallpapers`
+
+*`$XDG_DATA_HOME` is used instead of `~/.local/share` when set.*
 
 <br>
 <br>
 
 ## Building
 
-1.  Install the **[.NET 5 SDK]**
+1.  Install the **[.NET 10 SDK]**
 
-2. Navigate to project folder
+2. Navigate to `src/lively`
 
 3. Build the project with:
 
     ```shell
     dotnet build
+    ```
+
+4. Run the app with:
+
+    ```shell
+    dotnet run --project lively
+    ```
+
+5. Run the tests with:
+
+    ```shell
+    dotnet test
     ```
 
 <br>
@@ -70,7 +86,8 @@ Wallpapers are saved in:
 
 [Lively Wallpaper]: https://github.com/rocksdanister/lively
 [AvaloniaUI]: https://github.com/AvaloniaUI/Avalonia
-[.NET 5 SDK]: https://dotnet.microsoft.com/download
+[.NET 10 SDK]: https://dotnet.microsoft.com/download
+[Revival Plan]: REVIVAL_PLAN.md
 [MPV.Net]: https://github.com/mireo91/Mpv.NET-lib-
 [MPV]: https://github.com/mpv-player/mpv
 
