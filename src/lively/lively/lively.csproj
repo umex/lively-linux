@@ -16,10 +16,19 @@
 		<PackageReference Include="NLog" Version="6.2.2" />
 		<PackageReference Include="Octokit" Version="14.0.0" />
 		<PackageReference Include="SharpZipLib" Version="1.4.2" />
+		<PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
+		<PackageReference Include="Tmds.DBus.Generator" Version="0.95.2" PrivateAssets="all" />
 	</ItemGroup>
 	<ItemGroup>
 	  <ProjectReference Include="..\lively.Common\lively.Common.csproj" />
 	  <ProjectReference Include="..\lively.Core\lively.Core.csproj" />
+	  <ProjectReference Include="..\lively.Ipc\lively.Ipc.csproj" />
 	  <ProjectReference Include="..\lively.Models\lively.Models.csproj" />
+	  <!-- Copy lively-daemon and lively-player-dummy next to the UI, which starts the daemon. -->
+	  <ProjectReference Include="..\lively.Daemon\lively.Daemon.csproj" />
+	  <ProjectReference Include="..\lively.Player.Dummy\lively.Player.Dummy.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+	  <AdditionalFiles Include="..\lively.Ipc\dbus-xml\org.freedesktop.Application.xml" Link="DBus\org.freedesktop.Application.xml" DBusGeneratorMode="Handler" Namespace="lively.DBus" Visibility="internal" />
 	</ItemGroup>
 </Project>

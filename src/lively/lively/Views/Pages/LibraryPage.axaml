@@ -12,40 +12,63 @@
   <UserControl.Resources>
     <ext:BitmapAssetValueConverter x:Key="variableImage"/>
   </UserControl.Resources>
-  
-  <ListBox ItemsSource="{Binding LibraryItems}" SelectedItem="{Binding SelectedItem}" Background="Transparent">
-    <ListBox.Styles>
-      <Style Selector="ListBoxItem">
-        <Setter Property="Padding" Value="2.5"/>
-      </Style>
-    </ListBox.Styles>
-    <ListBox.ContextMenu>
-      <ContextMenu>
-        <MenuItem Header="About"/>
-        <MenuItem Header="Set Wallpaper"/>
-        <MenuItem Header="Preview Wallpaper"/>
-        <MenuItem Header="Customise Wallpaper"/>
-        <MenuItem Header="Open File Location"/>
-        <MenuItem Header="Export Lively .Zip"/>
-        <MenuItem Header="Delete Wallpaper"/>
-      </ContextMenu>
-    </ListBox.ContextMenu>
-    <ItemsControl.ItemsPanel>
-      <ItemsPanelTemplate>
-        <WrapPanel/>
-      </ItemsPanelTemplate>
-    </ItemsControl.ItemsPanel>
-    <ListBox.ItemTemplate>
-      <DataTemplate x:DataType="models:LibraryModel">
-        <Grid Width="272" Height="153">
-          <Image Source="{Binding ImagePath, Converter={StaticResource variableImage}}"
-            Stretch="UniformToFill"/>
-          <StackPanel VerticalAlignment="Bottom" Height="60" Background="#80000000">
-            <TextBlock Margin="5,0,0,0" Text="{Binding Title}" VerticalAlignment="Bottom"/>
-            <TextBlock Margin="5,0,0,0" TextWrapping="Wrap" FontSize="12.5" Text="{Binding Desc}" Foreground="#BFFFFFFF"/>
-          </StackPanel>
-        </Grid>
-      </DataTemplate>
-    </ListBox.ItemTemplate>
-  </ListBox>
+
+  <DockPanel>
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,*" Margin="5,0,5,5">
+      <TextBlock Grid.Column="0" Text="Display" VerticalAlignment="Center" Margin="0,0,8,0"/>
+      <ComboBox Grid.Column="1" MinWidth="260"
+                ItemsSource="{Binding Displays}"
+                SelectedItem="{Binding SelectedDisplay}"
+                IsEnabled="{Binding IsCoreAvailable}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate x:DataType="models:DisplayMonitor">
+            <TextBlock Text="{Binding DisplayName}" ToolTip.Tip="{Binding Description}"/>
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+      <Button Grid.Column="2" Margin="8,0,0,0" Content="Close wallpaper"
+              Command="{Binding CloseWallpaperCommand}" IsEnabled="{Binding IsCoreAvailable}"/>
+      <Button Grid.Column="3" Margin="8,0,0,0" Content="Close all"
+              Command="{Binding CloseAllWallpapersCommand}" IsEnabled="{Binding IsCoreAvailable}"/>
+      <TextBlock Grid.Column="4" Margin="12,0,0,0" VerticalAlignment="Center"
+                 Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis"
+                 ToolTip.Tip="{Binding StatusMessage}" Foreground="#BFFFFFFF"/>
+    </Grid>
+
+    <ListBox ItemsSource="{Binding LibraryItems}" SelectedItem="{Binding SelectedItem}" Background="Transparent">
+      <ListBox.Styles>
+        <Style Selector="ListBoxItem">
+          <Setter Property="Padding" Value="2.5"/>
+        </Style>
+      </ListBox.Styles>
+      <ListBox.ContextMenu>
+        <ContextMenu>
+          <MenuItem Header="About"/>
+          <MenuItem Header="Set Wallpaper" Command="{Binding SetWallpaperCommand}" CommandParameter="{Binding SelectedItem}"/>
+          <MenuItem Header="Preview Wallpaper"/>
+          <MenuItem Header="Customise Wallpaper"/>
+          <MenuItem Header="Open File Location"/>
+          <MenuItem Header="Export Lively .Zip"/>
+          <MenuItem Header="Delete Wallpaper"/>
+        </ContextMenu>
+      </ListBox.ContextMenu>
+      <ItemsControl.ItemsPanel>
+        <ItemsPanelTemplate>
+          <WrapPanel/>
+        </ItemsPanelTemplate>
+      </ItemsControl.ItemsPanel>
+      <ListBox.ItemTemplate>
+        <DataTemplate x:DataType="models:LibraryModel">
+          <Grid Width="272" Height="153">
+            <Image Source="{Binding ImagePath, Converter={StaticResource variableImage}}"
+              Stretch="UniformToFill"/>
+            <StackPanel VerticalAlignment="Bottom" Height="60" Background="#80000000">
+              <TextBlock Margin="5,0,0,0" Text="{Binding Title}" VerticalAlignment="Bottom"/>
+              <TextBlock Margin="5,0,0,0" TextWrapping="Wrap" FontSize="12.5" Text="{Binding Desc}" Foreground="#BFFFFFFF"/>
+            </StackPanel>
+          </Grid>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
 </UserControl>

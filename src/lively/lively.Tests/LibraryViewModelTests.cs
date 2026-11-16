@@ -1,11 +1,35 @@
+using lively.Ipc;
+using lively.Models;
+using lively.Tests.Fakes;
+using Tmds.DBus.Protocol;
+
 namespace lively.Tests;
 
-public class LibraryViewModelTests
+public sealed class LibraryViewModelTests : IDisposable
 {
+    private readonly TempDirectory tmp = new();
+    private readonly FakeCoreClient core = new()
+    {
+        Displays =
+        [
+            new DisplayMonitor { Id = "DP-1", Width = 1920, Height = 1080 },
+            new DisplayMonitor { Id = "DP-2", Width = 2560, Height = 1440, X = 1920, IsPrimary = true },
+        ],
+    };
+
+    public void Dispose() => tmp.Dispose();
+
+    private async Task<LibraryViewModel> CreateConnectedAsync()
+    {
+        WallpaperFixture.Create(tmp, "rain", "Rain");
+        var vm = new LibraryViewModel(core, [tmp.Path], a => a());
+        await vm.InitializeAsync();
+        return vm;
+    }
+
     [Fact]
     public void AddWallpaper_InsertsInTitleOrder()
     {
-        using var tmp = new TempDirectory();
         using var other = new TempDirectory();
         WallpaperFixture.Create(tmp, "1", "Aurora");
         WallpaperFixture.Create(tmp, "2", "Waves");
@@ -19,7 +43,6 @@ public class LibraryViewModelTests
     [Fact]
     public void SelectedItem_StoresValueAndNotifies()
     {
-        using var tmp = new TempDirectory();
         WallpaperFixture.Create(tmp, "1", "Rain");
         var vm = new LibraryViewModel([tmp.Path]);
         var changed = new List<string?>();
@@ -29,5 +52,129 @@ public class LibraryViewModelTests
 
         Assert.Same(vm.LibraryItems[0], vm.SelectedItem);
         Assert.Equal([nameof(LibraryViewModel.SelectedItem)], changed);
+    }
+
+    [Fact]
+    public async Task Initialize_LoadsDisplaysAndSelectsThePrimary()
+    {
+        core.Running.Add(new RunningWallpaper("DP-1", "/somewhere"));
+
+        var vm = await CreateConnectedAsync();
+
+        Assert.True(core.Connected);
+        Assert.True(vm.IsCoreAvailable);
+        Assert.Equal(["DP-1", "DP-2"], vm.Displays.Select(x => x.Id));
+        Assert.Equal("DP-2", vm.SelectedDisplay?.Id);
+        Assert.Equal("/somewhere", vm.RunningWallpapers["DP-1"]);
+        Assert.Equal("Running: \"/somewhere\" on DP-1", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task Initialize_WithoutCore_IsUnavailable()
+    {
+        var vm = new LibraryViewModel(null, [tmp.Path]);
+
+        await vm.InitializeAsync();
+
+        Assert.False(vm.IsCoreAvailable);
+        Assert.Contains("not reachable", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task SetWallpaper_SendsFolderAndSelectedDisplay()
+    {
+        var vm = await CreateConnectedAsync();
+        vm.SelectedDisplay = vm.Displays[0];
+        var item = vm.LibraryItems[0];
+
+        await vm.SetWallpaperCommand.ExecuteAsync(item);
+
+        Assert.Equal([("SetWallpaper", item.LivelyInfoFolderPath, "DP-1")], core.Calls);
+        Assert.Contains("running on DP-1", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task SetWallpaper_WithoutSelectedDisplay_SendsEmptyId()
+    {
+        var vm = await CreateConnectedAsync();
+        vm.SelectedDisplay = null;
+        vm.SelectedItem = vm.LibraryItems[0];
+
+        await vm.SetWallpaperCommand.ExecuteAsync(null);
+
+        Assert.Equal([("SetWallpaper", vm.LibraryItems[0].LivelyInfoFolderPath, "")], core.Calls);
+    }
+
+    [Fact]
+    public async Task SetWallpaper_WithoutItem_DoesNotCallTheCore()
+    {
+        var vm = await CreateConnectedAsync();
+
+        await vm.SetWallpaperCommand.ExecuteAsync(null);
+
+        Assert.Empty(core.Calls);
+        Assert.Equal("Select a wallpaper first.", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task SetWallpaper_ClientError_GoesToStatusMessage()
+    {
+        var vm = await CreateConnectedAsync();
+        core.CallError = new DBusErrorReplyException(CoreErrors.PlayerFailed, "player did not load");
+
+        await vm.SetWallpaperCommand.ExecuteAsync(vm.LibraryItems[0]);
+
+        Assert.Equal("Could not set \"Rain\": player did not load", vm.StatusMessage);
+    }
+
+    [Fact]
+    public async Task CloseWallpaper_AndCloseAll()
+    {
+        var vm = await CreateConnectedAsync();
+        vm.SelectedDisplay = vm.Displays[0];
+
+        await vm.CloseWallpaperCommand.ExecuteAsync(null);
+        await vm.CloseAllWallpapersCommand.ExecuteAsync(null);
+
+        Assert.Equal([("CloseWallpaper", "DP-1", ""), ("CloseAllWallpapers", "", "")], core.Calls);
+    }
+
+    [Fact]
+    public async Task CoreEvents_UpdateTheViewModelThroughPost()
+    {
+        var posted = 0;
+        WallpaperFixture.Create(tmp, "rain", "Rain");
+        var vm = new LibraryViewModel(core, [tmp.Path], a => { posted++; a(); });
+        await vm.InitializeAsync();
+
+        var rain = vm.LibraryItems[0].LivelyInfoFolderPath;
+        core.RaiseWallpaperChanged("DP-2", rain);
+        Assert.Equal(rain, vm.RunningWallpapers["DP-2"]);
+        Assert.Equal("\"Rain\" is running on DP-2.", vm.StatusMessage);
+        core.RaiseWallpaperChanged("DP-2", null);
+        Assert.False(vm.RunningWallpapers.ContainsKey("DP-2"));
+        Assert.Equal("Wallpaper closed on DP-2.", vm.StatusMessage);
+        core.RaiseError("DP-2", "player crashed");
+        Assert.Equal("Error on DP-2: player crashed", vm.StatusMessage);
+        Assert.Equal(3, posted);
+    }
+
+    [Fact]
+    public async Task DisplaysChanged_ReloadsAndKeepsTheSelection()
+    {
+        var vm = await CreateConnectedAsync();
+        vm.SelectedDisplay = vm.Displays[0];
+
+        core.Displays = [new DisplayMonitor { Id = "HDMI-A-1", IsPrimary = true }, new DisplayMonitor { Id = "DP-1" }];
+        core.RaiseDisplaysChanged();
+
+        await Wait.UntilAsync(() => vm.Displays.Count == 2 && vm.Displays[0].Id == "HDMI-A-1", "displays reloaded");
+        Assert.Equal("DP-1", vm.SelectedDisplay?.Id);
+
+        core.Displays = [new DisplayMonitor { Id = "HDMI-A-1", IsPrimary = true }];
+        core.RaiseDisplaysChanged();
+
+        await Wait.UntilAsync(() => vm.Displays.Count == 1, "displays reloaded");
+        Assert.Equal("HDMI-A-1", vm.SelectedDisplay?.Id);
     }
 }
