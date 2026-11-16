@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="NLog" Version="6.2.2" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
+    <PackageReference Include="Tmds.DBus.Generator" Version="0.95.2" PrivateAssets="all" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\lively.Common\lively.Common.csproj" />
+    <ProjectReference Include="..\lively.Models\lively.Models.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AdditionalFiles Include="dbus-xml/io.github.lively_linux.Core1.xml" DBusGeneratorMode="Proxy" Namespace="lively.Ipc.DBus" Visibility="public" />
+    <AdditionalFiles Include="dbus-xml/org.freedesktop.Application.xml" DBusGeneratorMode="Proxy" Namespace="lively.Ipc.DBus.FreeDesktop" Visibility="public" />
+  </ItemGroup>
+
+</Project>

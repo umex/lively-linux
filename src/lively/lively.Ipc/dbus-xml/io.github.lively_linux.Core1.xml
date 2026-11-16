@@ -1,0 +1,46 @@
+<!DOCTYPE node PUBLIC "-//freedesktop//DTD D-BUS Object Introspection 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd">
+<node>
+  <!--
+    Core of lively-linux, owned by lively-daemon as io.github.lively_linux.Daemon
+    at /io/github/lively_linux/Core. Errors: io.github.lively_linux.Error.{WallpaperNotFound,
+    DisplayNotFound, PlayerFailed, InvalidSettings, Failed}. See docs/ipc.md.
+  -->
+  <interface name="io.github.lively_linux.Core1">
+    <!-- (id, description, (x, y, width, height), scale, primary) -->
+    <method name="GetDisplays">
+      <arg name="displays" type="a(ss(iiii)db)" direction="out"/>
+    </method>
+    <!-- (display id, wallpaper folder) of running wallpapers -->
+    <method name="GetWallpapers">
+      <arg name="wallpapers" type="a(ss)" direction="out"/>
+    </method>
+    <!-- display "" = primary. Returns after the player reports msg_wploaded, or errors. -->
+    <method name="SetWallpaper">
+      <arg name="folder" type="s" direction="in"/>
+      <arg name="display" type="s" direction="in"/>
+    </method>
+    <method name="CloseWallpaper">
+      <arg name="display" type="s" direction="in"/>
+    </method>
+    <method name="CloseAllWallpapers"/>
+    <!-- settings as JSON -->
+    <method name="GetSettings">
+      <arg name="settings" type="s" direction="out"/>
+    </method>
+    <method name="SetSettings">
+      <arg name="settings" type="s" direction="in"/>
+    </method>
+    <method name="Quit"/>
+    <!-- folder "" = closed -->
+    <signal name="WallpaperChanged">
+      <arg name="display" type="s"/>
+      <arg name="folder" type="s"/>
+    </signal>
+    <signal name="DisplaysChanged"/>
+    <signal name="Error">
+      <arg name="display" type="s"/>
+      <arg name="message" type="s"/>
+    </signal>
+  </interface>
+</node>
