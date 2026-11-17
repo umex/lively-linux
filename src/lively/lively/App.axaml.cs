@@ -50,11 +50,11 @@ namespace lively
                     // Created here, on the UI thread, so Activate and Open run on Avalonia's dispatcher.
                     var library = Services.GetRequiredService<LibraryViewModel>();
                     activationHandler = new ApplicationActivationHandler(connection, () => desktop.MainWindow,
-                        paths => library.ImportVideosAsync(paths));
+                        targets => library.ImportFilesAsync(targets));
                     connection.AddMethodHandler(activationHandler);
                 }
                 desktop.Exit += (_, _) => OnExit();
-                startupFiles = FileUris.CommandLinePaths(desktop.Args ?? []);
+                startupFiles = FileUris.CommandLineTargets(desktop.Args ?? []);
             }
 
             base.OnFrameworkInitializationCompleted();
@@ -77,7 +77,7 @@ namespace lively
             return services.BuildServiceProvider();
         }
 
-        /// <param name="startupFiles">Video files from the command line, imported once the core is reachable.</param>
+        /// <param name="startupFiles">Import targets from the command line, imported once the core is reachable.</param>
         private static async Task InitializeCoreAsync(DBusConnection? connection, IReadOnlyList<string> startupFiles)
         {
             var library = Services.GetRequiredService<LibraryViewModel>();
@@ -91,7 +91,7 @@ namespace lively
                 await library.InitializeAsync();
                 if (library.IsCoreAvailable && startupFiles.Count > 0)
                 {
-                    await library.ImportVideosAsync(startupFiles);
+                    await library.ImportFilesAsync(startupFiles);
                 }
             }
             catch (Exception e)

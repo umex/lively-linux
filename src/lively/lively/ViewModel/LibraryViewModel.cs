@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using lively.Core.Library;
+using lively.Helpers;
 using lively.Ipc;
 using lively.Models;
 using Tmds.DBus.Protocol;
@@ -249,10 +251,12 @@ namespace lively
         }
 
         /// <summary>
-        /// Imports the video files one after another through the core, adds each new wallpaper to the library
-        /// and selects it. A failed file is reported and the next one is tried.
+        /// Imports the targets one after another through the core, adds each new wallpaper to the library and
+        /// selects it. Folders and .html/.htm files are imported as web pages, http(s) addresses are added as
+        /// URL wallpapers, anything else is imported as a video (the core reports what is wrong with it).
+        /// A failed target is reported and the next one is tried.
         /// </summary>
-        public async Task ImportVideosAsync(IReadOnlyList<string> paths)
+        public async Task ImportFilesAsync(IReadOnlyList<string> paths)
         {
             if (paths.Count == 0)
             {
@@ -267,19 +271,21 @@ namespace lively
             string? lastError = null;
             foreach (var path in paths)
             {
-                var name = System.IO.Path.GetFileName(path);
+                var isAddress = FileUris.IsWebAddress(path);
+                // Addresses are not shown or logged: they may hold a password, which the core refuses.
+                var name = isAddress ? "the web address" : Path.GetFileName(Path.TrimEndingDirectorySeparator(path));
                 StatusMessage = $"Importing {name}…";
                 try
                 {
-                    var folder = await core.ImportVideoAsync(path);
-                    var item = AddWallpaper(folder)
-                        ?? throw new InvalidOperationException($"the imported folder {folder} is not readable.");
-                    SelectedItem = item;
+                    var folder = isAddress ? await core.AddUrlAsync(path)
+                        : IsWebPage(path) ? await core.ImportWebAsync(path)
+                        : await core.ImportVideoAsync(path);
+                    AddImported(folder);
                     imported++;
                 }
                 catch (Exception e)
                 {
-                    Logger.Error($"ImportVideo {path} failed: {e.Message}");
+                    Logger.Error($"Import of {(isAddress ? "a web address" : path)} failed: {Describe(e)}");
                     lastError = $"Could not import {name}: {Describe(e)}";
                 }
             }
@@ -291,6 +297,65 @@ namespace lively
             {
                 StatusMessage = imported == 0 ? lastError : $"Imported {imported} of {paths.Count} wallpaper(s). {lastError}";
             }
+        }
+
+        private string _urlText = string.Empty;
+        /// <summary>Web address typed for <see cref="AddUrlCommand"/>; cleared once it was added.</summary>
+        public string UrlText
+        {
+            get { return _urlText; }
+            set { SetProperty(ref _urlText, value ?? string.Empty); }
+        }
+
+        /// <summary>Raised after <see cref="AddUrlCommand"/> added a wallpaper; the view closes its input then.</summary>
+        public event EventHandler? UrlAdded;
+
+        /// <summary>Adds <see cref="UrlText"/> as a URL wallpaper, selects it and clears the text. Errors go to the status line.</summary>
+        [RelayCommand]
+        private async Task AddUrl()
+        {
+            if (core == null)
+            {
+                StatusMessage = "lively-daemon is not reachable.";
+                return;
+            }
+            var url = UrlText.Trim();
+            if (url.Length == 0)
+            {
+                StatusMessage = "Enter a web address starting with http:// or https://.";
+                return;
+            }
+            StatusMessage = "Adding the web address…";
+            try
+            {
+                var item = AddImported(await core.AddUrlAsync(url));
+                UrlText = string.Empty;
+                StatusMessage = $"Added \"{item.Title}\".";
+                UrlAdded?.Invoke(this, EventArgs.Empty);
+            }
+            catch (Exception e)
+            {
+                // The core's message names the address without a password; the raw text is not logged.
+                Logger.Error("AddUrl failed: " + Describe(e));
+                StatusMessage = "Could not add the web address: " + Describe(e);
+            }
+        }
+
+        /// <summary>Adds the new wallpaper folder to the library and selects it.</summary>
+        private LibraryModel AddImported(string folder)
+        {
+            var item = AddWallpaper(folder)
+                ?? throw new InvalidOperationException($"the imported folder {folder} is not readable.");
+            SelectedItem = item;
+            return item;
+        }
+
+        private static bool IsWebPage(string path)
+        {
+            var extension = Path.GetExtension(path);
+            return Directory.Exists(path)
+                || extension.Equals(".html", StringComparison.OrdinalIgnoreCase)
+                || extension.Equals(".htm", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task ReloadDisplaysAsync()

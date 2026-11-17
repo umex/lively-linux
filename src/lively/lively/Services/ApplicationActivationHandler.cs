@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using lively.Common;
@@ -12,7 +13,7 @@ namespace lively.Services
     /// <summary>
     /// org.freedesktop.Application on <see cref="Constants.DBus.UiObjectPath"/>: a second launch of the UI
     /// calls Activate, which brings the existing main window to the front, or Open with file:// URIs of
-    /// videos to import.
+    /// videos, web pages and page folders, or http(s) addresses, to import.
     /// </summary>
     /// <remarks>Construct on the UI thread: method calls are dispatched to the SynchronizationContext captured here.</remarks>
     internal sealed class ApplicationActivationHandler : DBusHandler, IApplicationHandler
@@ -22,7 +23,7 @@ namespace lively.Services
         private readonly Func<Window?> getWindow;
         private readonly Func<IReadOnlyList<string>, Task> openFiles;
 
-        /// <param name="openFiles">Imports the local paths of an Open call; runs on the UI thread.</param>
+        /// <param name="openFiles">Imports the targets (local paths, web addresses) of an Open call; runs on the UI thread.</param>
         public ApplicationActivationHandler(DBusConnection connection, Func<Window?> getWindow, Func<IReadOnlyList<string>, Task> openFiles)
             : base(connection, Constants.DBus.UiObjectPath, handlesChildPaths: false, handleOnCapturedContext: true)
         {
@@ -39,8 +40,9 @@ namespace lively.Services
 
         public ValueTask OpenAsync(string[] uris, Dictionary<string, VariantValue> platformData)
         {
-            Logger.Info("Open requested: " + string.Join(", ", uris));
-            var paths = FileUris.ToLocalPaths(uris);
+            var paths = FileUris.FromUris(uris);
+            // Web addresses are not logged: they may hold a password, which the core refuses.
+            Logger.Info($"Open requested: {string.Join(", ", paths.Where(p => !FileUris.IsWebAddress(p)))} ({uris.Length} URI(s)).");
             ShowWindow();
             if (paths.Count > 0)
             {
