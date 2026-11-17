@@ -52,12 +52,24 @@ public sealed class FakeCoreClient : ICoreClient
 
     public Task<bool> GetPausedAsync() => Task.FromResult(Paused);
 
-    /// <summary>Returned by ImportVideoAsync.</summary>
+    /// <summary>Returned by ImportVideoAsync, ImportWebAsync and AddUrlAsync.</summary>
     public string ImportResultFolder { get; set; } = "";
 
     public async Task<string> ImportVideoAsync(string path)
     {
         await Record("ImportVideo", path);
+        return ImportResultFolder;
+    }
+
+    public async Task<string> ImportWebAsync(string path)
+    {
+        await Record("ImportWeb", path);
+        return ImportResultFolder;
+    }
+
+    public async Task<string> AddUrlAsync(string url)
+    {
+        await Record("AddUrl", url);
         return ImportResultFolder;
     }
 

@@ -24,17 +24,20 @@ namespace lively.Core.DBus
         private readonly IDisplayManager displayManager;
         private readonly ISettingsService settingsService;
         private readonly VideoImporter importer;
+        private readonly WebImporter webImporter;
         private readonly Action quit;
         private bool attached;
 
         public CoreDBusHandler(DBusConnection connection, string path, IWallpaperService wallpaperService,
-            IDisplayManager displayManager, ISettingsService settingsService, VideoImporter importer, Action quit)
+            IDisplayManager displayManager, ISettingsService settingsService, VideoImporter importer,
+            WebImporter webImporter, Action quit)
             : base(connection, path, handlesChildPaths: false, synchronizationContext: new SynchronizationContext())
         {
             this.wallpaperService = wallpaperService;
             this.displayManager = displayManager;
             this.settingsService = settingsService;
             this.importer = importer;
+            this.webImporter = webImporter;
             this.quit = quit;
         }
 
@@ -158,14 +161,20 @@ namespace lively.Core.DBus
                 throw new DBusErrorReplyException(CoreErrors.ImportFailed, $"\"{path}\" does not exist.");
             }
             Logger.Info($"D-Bus ImportVideo {path}.");
-            try
-            {
-                return await importer.ImportAsync(path).ConfigureAwait(false);
-            }
-            catch (VideoImportException e)
-            {
-                throw new DBusErrorReplyException(CoreErrors.ImportFailed, e.Message);
-            }
+            return await RunImportAsync(() => importer.ImportAsync(path)).ConfigureAwait(false);
+        }
+
+        public async ValueTask<string> ImportWebAsync(string path)
+        {
+            Logger.Info($"D-Bus ImportWeb {path}.");
+            return await RunImportAsync(() => webImporter.ImportAsync(path)).ConfigureAwait(false);
+        }
+
+        public async ValueTask<string> AddUrlAsync(string url)
+        {
+            // Not the address: it may hold a password, which WebImporter refuses without logging it.
+            Logger.Info("D-Bus AddUrl.");
+            return await RunImportAsync(() => Task.FromResult(webImporter.AddUrl(url))).ConfigureAwait(false);
         }
 
         public ValueTask QuitAsync()
@@ -191,6 +200,19 @@ namespace lively.Core.DBus
                 ex = new DBusErrorReplyException(CoreErrors.Failed, ex.Message);
             }
             base.HandleException(context, ex);
+        }
+
+        /// <summary>Runs an import; its <see cref="ImportException"/> becomes an ImportFailed error reply.</summary>
+        private static async Task<string> RunImportAsync(Func<Task<string>> import)
+        {
+            try
+            {
+                return await import().ConfigureAwait(false);
+            }
+            catch (ImportException e)
+            {
+                throw new DBusErrorReplyException(CoreErrors.ImportFailed, e.Message);
+            }
         }
 
         private static LibraryModel ResolveWallpaper(string folder)

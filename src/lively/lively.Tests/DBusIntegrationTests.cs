@@ -68,7 +68,8 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     private async Task<CoreDBusServer> StartServerAsync(IWallpaperService wallpaperService)
     {
         var server = new CoreDBusServer(wallpaperService, displays, new JsonSettingsService(tmp.Combine("config", "Settings.json")),
-            new VideoImporter(tmp.Combine("library", "wallpapers")), () => Interlocked.Increment(ref quitCalls));
+            new VideoImporter(tmp.Combine("library", "wallpapers")), new WebImporter(tmp.Combine("library", "wallpapers")),
+            () => Interlocked.Increment(ref quitCalls));
         disposables.Add(server);
         Assert.True(await server.StartAsync(await ConnectAsync(), busName));
         return server;
@@ -288,6 +289,65 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     }
 
     [DBusFact]
+    public async Task ImportWeb_EndToEnd_ReturnsAWallpaperThatCanBeSet()
+    {
+        await StartAsync();
+        var page = tmp.WriteFile("<title>Aurora</title>", "pages", "aurora.html");
+
+        var folder = await client.ImportWebAsync(page);
+
+        Assert.Equal(tmp.Combine("library", "wallpapers", "aurora"), folder);
+        var model = LibraryScanner.ScanFolder(folder);
+        Assert.NotNull(model);
+        Assert.Equal((lively.Common.WallpaperType.web, "Aurora"), (model.LivelyInfo.Type, model.Title));
+        await client.SetWallpaperAsync(folder, "DP-1");
+        Assert.Equal([new RunningWallpaper("DP-1", folder)], await client.GetWallpapersAsync());
+    }
+
+    [DBusFact]
+    public async Task ImportWeb_Failures_AreImportFailed()
+    {
+        await StartAsync();
+        var empty = tmp.CreateDirectory("pages", "empty");
+
+        Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.ImportWebAsync("pages/a.html")));
+        Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.ImportWebAsync("")));
+        Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.ImportWebAsync(tmp.Combine("missing.html"))));
+        var e = await Assert.ThrowsAsync<DBusErrorReplyException>(() => client.ImportWebAsync(empty));
+        Assert.Equal(CoreErrors.ImportFailed, e.ErrorName);
+        Assert.Equal("\"empty\" has no HTML file (.html or .htm) at its top level.", e.ErrorMessage);
+        Assert.False(Directory.Exists(tmp.Combine("library", "wallpapers")));
+    }
+
+    [DBusFact]
+    public async Task AddUrl_EndToEnd_ReturnsAWallpaperThatCanBeSet()
+    {
+        await StartAsync();
+
+        var folder = await client.AddUrlAsync("https://example.com/aquarium");
+
+        Assert.Equal(tmp.Combine("library", "wallpapers", "example-com-aquarium"), folder);
+        var model = LibraryScanner.ScanFolder(folder);
+        Assert.NotNull(model);
+        Assert.Equal((lively.Common.WallpaperType.url, "https://example.com/aquarium"), (model.LivelyInfo.Type, model.FilePath));
+        await client.SetWallpaperAsync(folder, "HDMI-A-1");
+        Assert.Equal([new RunningWallpaper("HDMI-A-1", folder)], await client.GetWallpapersAsync());
+    }
+
+    [DBusFact]
+    public async Task AddUrl_NotAWebAddress_IsImportFailed()
+    {
+        await StartAsync();
+
+        var e = await Assert.ThrowsAsync<DBusErrorReplyException>(() => client.AddUrlAsync("file:///etc/passwd"));
+
+        Assert.Equal(CoreErrors.ImportFailed, e.ErrorName);
+        Assert.Equal("\"file:///etc/passwd\" is not a web address; it must start with http:// or https://.", e.ErrorMessage);
+        Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.AddUrlAsync("")));
+        Assert.False(Directory.Exists(tmp.Combine("library", "wallpapers")));
+    }
+
+    [DBusFact]
     public async Task DisplaysChanged_IsSignalled()
     {
         await StartAsync();
@@ -313,7 +373,7 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     {
         await StartAsync();
         var second = new CoreDBusServer(service, displays, new JsonSettingsService(tmp.Combine("other.json")),
-            new VideoImporter(tmp.Combine("other-wallpapers")), () => { });
+            new VideoImporter(tmp.Combine("other-wallpapers")), new WebImporter(tmp.Combine("other-wallpapers")), () => { });
         disposables.Add(second);
 
         Assert.False(await second.StartAsync(await ConnectAsync(), busName));

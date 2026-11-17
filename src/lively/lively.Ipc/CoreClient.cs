@@ -113,6 +113,18 @@ namespace lively.Ipc
             return proxy.ImportVideoAsync(path);
         }
 
+        public Task<string> ImportWebAsync(string path)
+        {
+            ArgumentNullException.ThrowIfNull(path);
+            return proxy.ImportWebAsync(path);
+        }
+
+        public Task<string> AddUrlAsync(string url)
+        {
+            ArgumentNullException.ThrowIfNull(url);
+            return proxy.AddUrlAsync(url);
+        }
+
         public Task QuitAsync() => proxy.QuitAsync();
 
         public async ValueTask DisposeAsync()

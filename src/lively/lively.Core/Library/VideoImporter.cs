@@ -68,7 +68,7 @@ namespace lively.Core.Library
     }
 
     /// <summary>A video could not be imported; the message is meant for the user.</summary>
-    public sealed class VideoImportException(string message, Exception? inner = null) : Exception(message, inner);
+    public sealed class VideoImportException(string message, Exception? inner = null) : ImportException(message, inner);
 
     /// <summary>Video stream properties read by ffprobe. Duration is 0 when unknown.</summary>
     internal sealed record VideoProbe(string Codec, int Width, int Height, double Duration);
@@ -82,14 +82,11 @@ namespace lively.Core.Library
         private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
 
         public const string ThumbnailFileName = "thumbnail.jpg";
-        private const int MaxSlugLength = 60;
         private const int MaxErrorOutputLength = 500;
 
         private readonly string wallpapersDirectory;
         private readonly IProcessRunner runner;
         private readonly Func<string, string?> findOnPath;
-        // Folder name choice and creation are one step, so that parallel imports of the same title differ.
-        private readonly Lock folderLock = new();
 
         /// <param name="wallpapersDirectory">Parent folder of the library's wallpapers; created when missing.</param>
         /// <param name="runner">Runs ffprobe and ffmpeg; <see cref="ProcessRunner"/> when null.</param>
@@ -150,12 +147,7 @@ namespace lively.Core.Library
                     throw new VideoImportException($"\"{fileName}\" {e.Message}");
                 }
 
-                Directory.CreateDirectory(wallpapersDirectory);
-                lock (folderLock)
-                {
-                    folder = UniqueFolder(wallpapersDirectory, Slugify(title));
-                    Directory.CreateDirectory(folder);
-                }
+                folder = LibraryFolders.CreateUnique(wallpapersDirectory, Slugify(title));
 
                 var copy = Path.Combine(folder, fileName);
                 File.Copy(path, copy);
@@ -189,19 +181,19 @@ namespace lively.Core.Library
             catch (OperationCanceledException)
             {
                 Logger.Info($"Import of {path} cancelled.");
-                DeleteFolder(folder);
+                LibraryFolders.Delete(folder);
                 throw;
             }
             catch (VideoImportException e)
             {
                 Logger.Error($"Import of {path} failed: {e.Message}");
-                DeleteFolder(folder);
+                LibraryFolders.Delete(folder);
                 throw;
             }
             catch (Exception e)
             {
                 Logger.Error($"Import of {path} failed: {e}");
-                DeleteFolder(folder);
+                LibraryFolders.Delete(folder);
                 throw new VideoImportException($"\"{fileName}\" could not be imported: {e.Message}", e);
             }
         }
@@ -237,52 +229,8 @@ namespace lively.Core.Library
             return new VideoProbe(codec, width, height, duration);
         }
 
-        /// <summary>
-        /// Folder name for a title: lower-case a-z and 0-9, runs of other characters become one "-",
-        /// at most 60 characters, "video" when nothing is left.
-        /// </summary>
-        internal static string Slugify(string title)
-        {
-            var sb = new StringBuilder();
-            var dash = false;
-            foreach (var c in title.ToLowerInvariant())
-            {
-                if (c is >= 'a' and <= 'z' or >= '0' and <= '9')
-                {
-                    if (dash && sb.Length > 0)
-                    {
-                        sb.Append('-');
-                    }
-                    dash = false;
-                    sb.Append(c);
-                    if (sb.Length >= MaxSlugLength)
-                    {
-                        break;
-                    }
-                }
-                else
-                {
-                    dash = true;
-                }
-            }
-            if (sb.Length > MaxSlugLength)
-            {
-                sb.Length = MaxSlugLength;
-            }
-            var slug = sb.ToString().Trim('-');
-            return slug.Length == 0 ? "video" : slug;
-        }
-
-        /// <summary>Path of <paramref name="slug"/> under <paramref name="parent"/>, with -2, -3, … appended while taken.</summary>
-        internal static string UniqueFolder(string parent, string slug)
-        {
-            var candidate = Path.Combine(parent, slug);
-            for (var i = 2; Directory.Exists(candidate) || File.Exists(candidate); i++)
-            {
-                candidate = Path.Combine(parent, $"{slug}-{i}");
-            }
-            return candidate;
-        }
+        /// <summary>Folder name for a title, "video" when nothing is left (see <see cref="LibraryFolders.Slugify"/>).</summary>
+        internal static string Slugify(string title) => LibraryFolders.Slugify(title, "video");
 
         /// <summary>First file named <paramref name="name"/> in a PATH directory, or null.</summary>
         internal static string? FindOnPath(string name)
@@ -314,22 +262,6 @@ namespace lively.Core.Library
                 return "no error output";
             }
             return text.Length > MaxErrorOutputLength ? text[..MaxErrorOutputLength] + "…" : text;
-        }
-
-        private static void DeleteFolder(string? folder)
-        {
-            if (folder == null)
-            {
-                return;
-            }
-            try
-            {
-                Directory.Delete(folder, recursive: true);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                Logger.Error($"Could not remove the incomplete wallpaper folder {folder}: {e.Message}");
-            }
         }
     }
 }

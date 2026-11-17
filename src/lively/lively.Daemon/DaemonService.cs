@@ -26,6 +26,7 @@ namespace lively.Daemon
         private readonly IDisplayManager displayManager;
         private readonly ISettingsService settingsService;
         private readonly VideoImporter importer;
+        private readonly WebImporter webImporter;
         private readonly CancellationTokenSource stopping = new();
         private DBusConnection? connection;
         private CoreDBusServer? server;
@@ -35,7 +36,8 @@ namespace lively.Daemon
         private UserInstaller? installer;
 
         public DaemonService(DaemonOptions options, DaemonExitCode exitCode, IHostApplicationLifetime lifetime,
-            IWallpaperService wallpaperService, IDisplayManager displayManager, ISettingsService settingsService, VideoImporter importer)
+            IWallpaperService wallpaperService, IDisplayManager displayManager, ISettingsService settingsService, VideoImporter importer,
+            WebImporter webImporter)
         {
             this.options = options;
             this.exitCode = exitCode;
@@ -44,6 +46,7 @@ namespace lively.Daemon
             this.displayManager = displayManager;
             this.settingsService = settingsService;
             this.importer = importer;
+            this.webImporter = webImporter;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -66,7 +69,7 @@ namespace lively.Daemon
                 return;
             }
 
-            server = new CoreDBusServer(wallpaperService, displayManager, settingsService, importer, Quit);
+            server = new CoreDBusServer(wallpaperService, displayManager, settingsService, importer, webImporter, Quit);
             if (!await server.StartAsync(connection, Constants.DBus.DaemonBusName).ConfigureAwait(false))
             {
                 server = null;
