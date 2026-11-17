@@ -1,0 +1,85 @@
+<Project Sdk="Microsoft.Build.NoTargets/3.7.134">
+
+  <!--
+    Builds the C++/Qt 6 player lively-player-web with CMake and hands the binary to the projects that reference
+    this one (lively.Daemon, lively, lively.Tests), which copy it next to their output like the .NET players.
+
+    - Configure runs when obj/<Configuration>/cmake has no stamp of a successful configure. The CMake build step
+      runs on every build: CMake re-configures by itself when CMakeLists.txt changes and rebuilds only what
+      changed, so an up-to-date build costs well under a second.
+    - The binary ends up in bin/<Configuration>/lively-player-web.
+    - Missing prerequisites (cmake, a C++ compiler, the Qt 6 WebEngine or LayerShellQt development packages)
+      make configure fail: that is a warning, the solution still builds and web wallpapers report the missing
+      player. A failing compile once configure succeeded is an error.
+    - -p:BuildWebPlayer=false skips all of it.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <BuildWebPlayer Condition="'$(BuildWebPlayer)' == ''">true</BuildWebPlayer>
+    <WebPlayerName>lively-player-web</WebPlayerName>
+    <WebPlayerBuildType Condition="'$(Configuration)' == 'Release'">Release</WebPlayerBuildType>
+    <WebPlayerBuildType Condition="'$(WebPlayerBuildType)' == ''">RelWithDebInfo</WebPlayerBuildType>
+    <WebPlayerCMakeDir>$(MSBuildProjectDirectory)/obj/$(Configuration)/cmake</WebPlayerCMakeDir>
+    <WebPlayerConfigureStamp>$(WebPlayerCMakeDir)/lively-configure.stamp</WebPlayerConfigureStamp>
+    <WebPlayerConfigureLog>$(WebPlayerCMakeDir)/lively-configure.log</WebPlayerConfigureLog>
+    <WebPlayerOutDir>$(MSBuildProjectDirectory)/bin/$(Configuration)/</WebPlayerOutDir>
+    <WebPlayerBinary>$(WebPlayerOutDir)$(WebPlayerName)</WebPlayerBinary>
+    <WebPlayerPackages>gcc-c++ cmake qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtwebengine-devel layer-shell-qt-devel</WebPlayerPackages>
+    <WebPlayerEnabled Condition="'$(BuildWebPlayer)' == 'true' and '$(DesignTimeBuild)' != 'true' and $([MSBuild]::IsOSPlatform('Linux'))">true</WebPlayerEnabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="*.cpp;*.h;*.qml;CMakeLists.txt" />
+  </ItemGroup>
+
+  <Target Name="ConfigureWebPlayer" Condition="'$(WebPlayerEnabled)' == 'true' and !Exists('$(WebPlayerConfigureStamp)')">
+    <MakeDir Directories="$(WebPlayerCMakeDir)" />
+    <Exec Command="command -v cmake" IgnoreExitCode="true" StandardOutputImportance="low" EchoOff="true">
+      <Output TaskParameter="ExitCode" PropertyName="_WebPlayerCMakeFound" />
+    </Exec>
+    <PropertyGroup>
+      <_WebPlayerConfigureFailure Condition="'$(_WebPlayerCMakeFound)' != '0'">cmake is not on PATH</_WebPlayerConfigureFailure>
+    </PropertyGroup>
+    <!-- The output goes to a log: CMake's "CMake Error" lines must not become MSBuild errors. -->
+    <Exec Condition="'$(_WebPlayerConfigureFailure)' == ''"
+          Command="cmake -S &quot;$(MSBuildProjectDirectory)&quot; -B &quot;$(WebPlayerCMakeDir)&quot; -DCMAKE_BUILD_TYPE=$(WebPlayerBuildType) $(WebPlayerCMakeArgs) &gt; &quot;$(WebPlayerConfigureLog)&quot; 2&gt;&amp;1"
+          IgnoreExitCode="true" IgnoreStandardErrorWarningFormat="true" StandardOutputImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="_WebPlayerConfigureExitCode" />
+    </Exec>
+    <PropertyGroup>
+      <_WebPlayerConfigureFailure Condition="'$(_WebPlayerConfigureFailure)' == '' and '$(_WebPlayerConfigureExitCode)' != '0'">cmake configure failed (exit code $(_WebPlayerConfigureExitCode)), see $(WebPlayerConfigureLog)</_WebPlayerConfigureFailure>
+    </PropertyGroup>
+    <!-- A failed configure leaves a CMakeCache.txt behind; start clean next time so the warning repeats. -->
+    <Delete Condition="'$(_WebPlayerConfigureFailure)' != ''" Files="$(WebPlayerCMakeDir)/CMakeCache.txt" />
+    <Warning Condition="'$(_WebPlayerConfigureFailure)' != ''"
+             Code="LIVELYWEB01"
+             Text="$(WebPlayerName) was not built: $(_WebPlayerConfigureFailure). Building it needs cmake, a C++ compiler and the Qt 6 WebEngine and LayerShellQt development packages (Fedora: $(WebPlayerPackages)). Web wallpapers report the missing player until then; -p:BuildWebPlayer=false skips this step." />
+    <Touch Condition="'$(_WebPlayerConfigureFailure)' == ''" Files="$(WebPlayerConfigureStamp)" AlwaysCreate="true" />
+  </Target>
+
+  <!--
+    Runs before AssignTargetPaths, so that the binary is an item of this project by the time the referencing
+    projects ask for its files to copy (GetCopyToOutputDirectoryItems, GetCopyToPublishDirectoryItems).
+  -->
+  <Target Name="BuildWebPlayer" BeforeTargets="AssignTargetPaths" DependsOnTargets="ConfigureWebPlayer"
+          Condition="'$(WebPlayerEnabled)' == 'true'">
+    <!-- Compiler errors and warnings are reported as such. -->
+    <Exec Condition="Exists('$(WebPlayerConfigureStamp)')"
+          Command="cmake --build &quot;$(WebPlayerCMakeDir)&quot; --parallel $([System.Environment]::ProcessorCount)"
+          StandardOutputImportance="low" />
+    <Copy Condition="Exists('$(WebPlayerConfigureStamp)')"
+          SourceFiles="$(WebPlayerCMakeDir)/$(WebPlayerName)" DestinationFolder="$(WebPlayerOutDir)" SkipUnchangedFiles="true" />
+    <ItemGroup Condition="Exists('$(WebPlayerConfigureStamp)')">
+      <None Include="$(WebPlayerBinary)" Link="$(WebPlayerName)"
+            CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="CleanWebPlayer" AfterTargets="Clean">
+    <RemoveDir Directories="$(WebPlayerCMakeDir)" />
+    <Delete Files="$(WebPlayerBinary)" />
+  </Target>
+
+</Project>

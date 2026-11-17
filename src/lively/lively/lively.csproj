@@ -24,10 +24,11 @@
 	  <ProjectReference Include="..\lively.Core\lively.Core.csproj" />
 	  <ProjectReference Include="..\lively.Ipc\lively.Ipc.csproj" />
 	  <ProjectReference Include="..\lively.Models\lively.Models.csproj" />
-	  <!-- Copy lively-daemon, lively-player-dummy and lively-player-mpv next to the UI, which starts the daemon. -->
+	  <!-- Copy lively-daemon and the players next to the UI, which starts the daemon. -->
 	  <ProjectReference Include="..\lively.Daemon\lively.Daemon.csproj" />
 	  <ProjectReference Include="..\lively.Player.Dummy\lively.Player.Dummy.csproj" />
 	  <ProjectReference Include="..\lively.Player.Mpv\lively.Player.Mpv.csproj" />
+	  <ProjectReference Include="..\lively.Player.Web\lively.Player.Web.proj" ReferenceOutputAssembly="false" />
 	</ItemGroup>
 	<ItemGroup>
 	  <AdditionalFiles Include="..\lively.Ipc\dbus-xml\org.freedesktop.Application.xml" Link="DBus\org.freedesktop.Application.xml" DBusGeneratorMode="Handler" Namespace="lively.DBus" Visibility="internal" />

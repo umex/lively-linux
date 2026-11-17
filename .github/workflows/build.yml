@@ -17,8 +17,22 @@ jobs:
         with:
           dotnet-version: 10.0.x
       - run: dotnet restore lively.sln
+      # The runner has cmake and g++ but no Qt 6 WebEngine or LayerShellQt development packages (Ubuntu 24.04
+      # ships LayerShellQt for Qt 5 only): lively-player-web's configure fails with warning LIVELYWEB01, and its
+      # tests skip. The fedora job below compiles it.
       - run: dotnet build lively.sln --no-restore --configuration Release
       - name: Install D-Bus and ffmpeg
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends dbus ffmpeg
       # The D-Bus integration tests need a session bus; dbus-run-session starts a private one.
       - run: dbus-run-session -- dotnet test lively.sln --no-build --configuration Release
+
+  # Compile check of lively-player-web (C++/Qt 6) against the packages the README lists; no tests.
+  web-player:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: dnf install -y gcc-c++ cmake qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtwebengine-devel layer-shell-qt-devel
+      - run: cmake -S src/lively/lively.Player.Web -B build -DCMAKE_BUILD_TYPE=Release
+      - run: cmake --build build --parallel "$(nproc)"

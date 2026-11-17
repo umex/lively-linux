@@ -20,6 +20,8 @@
     <ProjectReference Include="..\lively.Player.Dummy\lively.Player.Dummy.csproj" />
     <!-- Copies lively-player-mpv next to lively-daemon. -->
     <ProjectReference Include="..\lively.Player.Mpv\lively.Player.Mpv.csproj" />
+    <!-- Builds lively-player-web (C++, CMake) and copies it next to lively-daemon when it was built. -->
+    <ProjectReference Include="..\lively.Player.Web\lively.Player.Web.proj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
