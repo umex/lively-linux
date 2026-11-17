@@ -18,6 +18,8 @@
     <ProjectReference Include="..\lively.Core\lively.Core.csproj" />
     <!-- Copies lively-player-dummy next to lively-daemon. -->
     <ProjectReference Include="..\lively.Player.Dummy\lively.Player.Dummy.csproj" />
+    <!-- Copies lively-player-mpv next to lively-daemon. -->
+    <ProjectReference Include="..\lively.Player.Mpv\lively.Player.Mpv.csproj" />
   </ItemGroup>
 
 </Project>

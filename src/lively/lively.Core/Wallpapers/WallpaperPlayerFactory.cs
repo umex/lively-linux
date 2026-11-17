@@ -4,11 +4,13 @@ using lively.Models;
 namespace lively.Core.Wallpapers
 {
     /// <summary>
-    /// Picks the player for a wallpaper. In Phase 2 every wallpaper type runs in lively-player-dummy.
+    /// Picks the player for a wallpaper: the one the desktop backend names (<see cref="IDesktopBackend.PlayerFor"/>,
+    /// lively-player-mpv for videos and GIFs on Wayland), else lively-player-dummy.
     /// </summary>
     public sealed class WallpaperPlayerFactory : IWallpaperPlayerFactory
     {
         public const string DummyPlayerName = "lively-player-dummy";
+        public const string MpvPlayerName = "lively-player-mpv";
 
         private readonly CoreOptions options;
         private readonly IDesktopBackend backend;
@@ -38,13 +40,23 @@ namespace lively.Core.Wallpapers
                 "--wallpaper-volume", volume.ToString(System.Globalization.CultureInfo.InvariantCulture),
             };
             args.AddRange(backend.GetPlayerArguments(display));
-            args.Add("--dummy-log");
-            args.Add(Path.Combine(options.PlayerLogDirectory, "player-dummy-" + SafeFileName(display.Id) + ".log"));
+
+            var player = backend.PlayerFor(model.LivelyInfo.Type) ?? DummyPlayerName;
+            if (player == MpvPlayerName)
+            {
+                args.Add("--mpv-log");
+                args.Add(Path.Combine(options.PlayerLogDirectory, "player-mpv-" + SafeFileName(display.Id) + ".log"));
+            }
+            else if (player == DummyPlayerName)
+            {
+                args.Add("--dummy-log");
+                args.Add(Path.Combine(options.PlayerLogDirectory, "player-dummy-" + SafeFileName(display.Id) + ".log"));
+            }
 
             PlayerLaunchInfo launch;
             try
             {
-                launch = PlayerExecutableResolver.Resolve(DummyPlayerName, args);
+                launch = PlayerExecutableResolver.Resolve(player, args);
             }
             catch (FileNotFoundException e)
             {

@@ -45,6 +45,9 @@ namespace lively.Core.Wallpapers
             volume = Math.Clamp(initialVolume, 0, 100);
         }
 
+        /// <summary>The executable and arguments this player starts.</summary>
+        public PlayerLaunchInfo Launch => launch;
+
         public bool IsLoaded { get; private set; }
 
         public bool IsExited => Volatile.Read(ref exitedRaised) == 1;

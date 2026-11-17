@@ -20,6 +20,7 @@ Lively Linux runs as three kinds of processes:
   processes. It keeps running when the UI is closed.
 - **Players** render one wallpaper on one display. In Phase 2 every wallpaper type runs in
   `lively-player-dummy`, which speaks the protocol but renders nothing.
+  On Wayland, videos and GIFs run in `lively-player-mpv` (libmpv on a `wlr-layer-shell` background surface).
 
 ## Bus names, paths, interfaces
 
@@ -149,6 +150,7 @@ The core starts the player with `ProcessStartInfo.ArgumentList` (no shell):
 | `--wallpaper-geometry <W>x<H>` | `2560x1440` |
 | `--wallpaper-volume <0-100>` | `0` (the `WallpaperVolume` setting) |
 | backend arguments | `--wallpaper-backend wayland --wallpaper-output DP-1 --wallpaper-desktop kde` |
+| `--mpv-log <path>` (`lively-player-mpv` only) | `~/.local/state/lively-wallpaper/logs/player-mpv-DP-1.log` |
 
 Players must ignore `--wallpaper-*` arguments they do not know. The dummy player additionally
 takes `--dummy-log <path>` (the core passes `~/.local/state/lively-wallpaper/logs/player-dummy-<display>.log`),

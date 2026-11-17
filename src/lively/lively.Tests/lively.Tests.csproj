@@ -25,6 +25,8 @@
     <ProjectReference Include="..\lively.Ipc\lively.Ipc.csproj" />
     <ProjectReference Include="..\lively.Models\lively.Models.csproj" />
     <ProjectReference Include="..\lively.Player.Dummy\lively.Player.Dummy.csproj" />
+    <!-- Copies lively-player-mpv next to the tests. Aliased: its linked WaylandInterfaceTable would clash with lively.Core's. -->
+    <ProjectReference Include="..\lively.Player.Mpv\lively.Player.Mpv.csproj" Aliases="MpvPlayer" />
   </ItemGroup>
 
 </Project>

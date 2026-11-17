@@ -19,6 +19,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lively.Ipc", "lively.Ipc\li
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lively.Daemon", "lively.Daemon\lively.Daemon.csproj", "{0D506A0A-8F2F-4D66-B462-A469B1C33054}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "lively.Player.Mpv", "lively.Player.Mpv\lively.Player.Mpv.csproj", "{CCE5D035-366A-4DEB-92A8-B4DA06637803}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -125,6 +127,18 @@ Global
 		{0D506A0A-8F2F-4D66-B462-A469B1C33054}.Release|x64.Build.0 = Release|Any CPU
 		{0D506A0A-8F2F-4D66-B462-A469B1C33054}.Release|x86.ActiveCfg = Release|Any CPU
 		{0D506A0A-8F2F-4D66-B462-A469B1C33054}.Release|x86.Build.0 = Release|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Debug|x64.Build.0 = Debug|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Debug|x86.Build.0 = Debug|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Release|Any CPU.Build.0 = Release|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Release|x64.ActiveCfg = Release|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Release|x64.Build.0 = Release|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Release|x86.ActiveCfg = Release|Any CPU
+		{CCE5D035-366A-4DEB-92A8-B4DA06637803}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

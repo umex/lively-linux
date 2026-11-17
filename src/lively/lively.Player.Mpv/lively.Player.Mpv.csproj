@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AssemblyName>lively-player-mpv</AssemblyName>
+    <RootNamespace>lively.Player.Mpv</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\lively.Models\lively.Models.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared with lively.Core; self-contained. -->
+    <Compile Include="..\lively.Core\Display\Wayland\WaylandInterfaceTable.cs" Link="Native\WaylandInterfaceTable.cs" />
+    <!-- Protocol definitions the hand-built interface tables follow (documentation only). -->
+    <None Include="protocol\*.xml" />
+  </ItemGroup>
+
+</Project>
