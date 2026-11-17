@@ -52,6 +52,7 @@ namespace lively
                 core.Error += (_, e) => this.post(() => StatusMessage = $"Error on {e.DisplayId}: {e.Message}");
                 core.DisplaysChanged += (_, _) => this.post(() => _ = ReloadDisplaysAsync());
                 core.PausedChanged += (_, paused) => this.post(() => IsPaused = paused);
+                core.WallpaperUpdated += (_, e) => this.post(() => OnWallpaperUpdated(e.FolderPath));
             }
         }
 
@@ -400,6 +401,38 @@ namespace lively
                 StatusMessage = $"\"{TitleOf(e.FolderPath)}\" is running on {e.DisplayId}.";
             }
             OnPropertyChanged(nameof(RunningWallpapers));
+        }
+
+        /// <summary>Re-reads a wallpaper folder whose LivelyInfo.json changed and replaces its tile in place.</summary>
+        private void OnWallpaperUpdated(string folder)
+        {
+            var key = Path.TrimEndingDirectorySeparator(folder);
+            var index = -1;
+            for (var i = 0; i < LibraryItems.Count; i++)
+            {
+                if (Path.TrimEndingDirectorySeparator(LibraryItems[i].LivelyInfoFolderPath) == key)
+                {
+                    index = i;
+                    break;
+                }
+            }
+            if (index < 0)
+            {
+                return;
+            }
+            var item = LibraryScanner.ScanFolder(folder);
+            if (item == null)
+            {
+                Logger.Warn($"Updated wallpaper {folder} is no longer readable; keeping its tile.");
+                return;
+            }
+            var wasSelected = ReferenceEquals(SelectedItem, LibraryItems[index]);
+            // A new item (with a new ImagePath) makes the tile load the new picture.
+            LibraryItems[index] = item;
+            if (wasSelected)
+            {
+                SelectedItem = item;
+            }
         }
 
         private string TitleOf(string folder) =>

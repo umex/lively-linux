@@ -22,11 +22,13 @@ public sealed class FakeCoreClient : ICoreClient
     public event EventHandler? DisplaysChanged;
     public event EventHandler<CoreErrorEventArgs>? Error;
     public event EventHandler<bool>? PausedChanged;
+    public event EventHandler<CoreWallpaperUpdatedEventArgs>? WallpaperUpdated;
 
     public void RaiseWallpaperChanged(string display, string? folder) => WallpaperChanged?.Invoke(this, new CoreWallpaperChangedEventArgs(display, folder));
     public void RaiseDisplaysChanged() => DisplaysChanged?.Invoke(this, EventArgs.Empty);
     public void RaiseError(string display, string message) => Error?.Invoke(this, new CoreErrorEventArgs(display, message));
     public void RaisePausedChanged(bool paused) => PausedChanged?.Invoke(this, paused);
+    public void RaiseWallpaperUpdated(string folder) => WallpaperUpdated?.Invoke(this, new CoreWallpaperUpdatedEventArgs(folder));
 
     public Task ConnectAsync(CancellationToken ct = default)
     {

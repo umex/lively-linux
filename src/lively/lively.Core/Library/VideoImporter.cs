@@ -82,6 +82,8 @@ namespace lively.Core.Library
         private static readonly NLog.Logger Logger = NLog.LogManager.GetCurrentClassLogger();
 
         public const string ThumbnailFileName = "thumbnail.jpg";
+        /// <summary>Width in pixels of library thumbnails (tiles are 272 wide; room for scaling).</summary>
+        public const int ThumbnailWidth = 480;
         private const int MaxErrorOutputLength = 500;
 
         private readonly string wallpapersDirectory;
@@ -157,7 +159,7 @@ namespace lively.Core.Library
                 var seek = probe.Duration > 0 ? Math.Min(1.0, probe.Duration / 10) : 0;
                 var thumbResult = await runner.RunAsync(ffmpeg,
                     ["-nostdin", "-v", "error", "-y", "-ss", seek.ToString("0.###", CultureInfo.InvariantCulture), "-i", copy,
-                        "-frames:v", "1", "-vf", "scale=480:-2", thumbnail],
+                        "-frames:v", "1", "-vf", $"scale={ThumbnailWidth}:-2", thumbnail],
                     ct).ConfigureAwait(false);
                 if (thumbResult.ExitCode != 0 || !File.Exists(thumbnail))
                 {

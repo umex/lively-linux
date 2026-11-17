@@ -68,5 +68,9 @@
     <signal name="PausedChanged">
       <arg name="paused" type="b"/>
     </signal>
+    <!-- the LivelyInfo.json of a wallpaper folder changed (a web wallpaper got its thumbnail); reload that folder -->
+    <signal name="WallpaperUpdated">
+      <arg name="folder" type="s"/>
+    </signal>
   </interface>
 </node>

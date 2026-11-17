@@ -52,6 +52,7 @@ namespace lively.Core.DBus
             wallpaperService.WallpaperChanged += OnWallpaperChanged;
             wallpaperService.WallpaperError += OnWallpaperError;
             wallpaperService.PausedChanged += OnPausedChanged;
+            wallpaperService.WallpaperUpdated += OnWallpaperUpdated;
             displayManager.DisplaysChanged += OnDisplaysChanged;
         }
 
@@ -65,6 +66,7 @@ namespace lively.Core.DBus
             wallpaperService.WallpaperChanged -= OnWallpaperChanged;
             wallpaperService.WallpaperError -= OnWallpaperError;
             wallpaperService.PausedChanged -= OnPausedChanged;
+            wallpaperService.WallpaperUpdated -= OnWallpaperUpdated;
             displayManager.DisplaysChanged -= OnDisplaysChanged;
         }
 
@@ -259,6 +261,11 @@ namespace lively.Core.DBus
         private void OnPausedChanged(object? sender, bool paused)
         {
             Connection.EmitPausedChanged(Path, paused);
+        }
+
+        private void OnWallpaperUpdated(object? sender, WallpaperUpdatedEventArgs e)
+        {
+            Connection.EmitWallpaperUpdated(Path, e.FolderPath);
         }
 
         #endregion

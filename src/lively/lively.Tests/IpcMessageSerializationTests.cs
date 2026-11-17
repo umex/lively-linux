@@ -70,6 +70,24 @@ public class IpcMessageSerializationTests
     }
 
     [Fact]
+    public void Screenshot_WireFormat()
+    {
+        // What lively-player-web receives and answers (see WebThumbnails).
+        Assert.Equal("{\"Type\":6,\"Format\":0,\"FilePath\":\"/w/page/thumbnail.jpg\",\"Delay\":3000,\"Width\":480}",
+            IpcMessageJson.Serialize(new LivelyScreenshotCmd { Format = ScreenshotFormat.jpeg, FilePath = "/w/page/thumbnail.jpg", Delay = 3000, Width = 480 }));
+        // Width 0 (native size) is left out, as upstream writes the command; a missing Width reads as 0.
+        Assert.Equal("{\"Type\":6,\"Format\":1,\"FilePath\":\"/tmp/a.png\",\"Delay\":0}",
+            IpcMessageJson.Serialize(new LivelyScreenshotCmd { Format = ScreenshotFormat.png, FilePath = "/tmp/a.png" }));
+        var upstream = Assert.IsType<LivelyScreenshotCmd>(IpcMessageJson.Deserialize("{\"Type\":6,\"Format\":0,\"FilePath\":\"/tmp/a.jpg\",\"Delay\":250}"));
+        Assert.Equal((250u, 0u), (upstream.Delay, upstream.Width));
+
+        var answer = Assert.IsType<LivelyMessageScreenshot>(IpcMessageJson.Deserialize("{\"Type\":3,\"FileName\":\"thumbnail.jpg\",\"Success\":true}"));
+        Assert.Equal(("thumbnail.jpg", true), (answer.FileName, answer.Success));
+        var byName = Assert.IsType<LivelyMessageScreenshot>(IpcMessageJson.Deserialize("{\"Type\":\"msg_screenshot\",\"FileName\":\"thumbnail.jpg\",\"Success\":false}"));
+        Assert.False(byName.Success);
+    }
+
+    [Fact]
     public void Deserialize_AcceptsEnumName()
     {
         var msg = IpcMessageJson.Deserialize("{\"Type\":\"cmd_volume\",\"Volume\":10}");

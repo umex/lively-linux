@@ -18,6 +18,18 @@ namespace lively.Ipc
         public string? FolderPath { get; }
     }
 
+    /// <summary>The WallpaperUpdated signal.</summary>
+    public sealed class CoreWallpaperUpdatedEventArgs : EventArgs
+    {
+        public CoreWallpaperUpdatedEventArgs(string folderPath)
+        {
+            FolderPath = folderPath;
+        }
+
+        /// <summary>Wallpaper folder whose LivelyInfo.json changed.</summary>
+        public string FolderPath { get; }
+    }
+
     /// <summary>The Error signal.</summary>
     public sealed class CoreErrorEventArgs : EventArgs
     {

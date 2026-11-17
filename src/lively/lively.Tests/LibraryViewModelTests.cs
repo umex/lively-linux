@@ -433,6 +433,57 @@ public sealed class LibraryViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task WallpaperUpdated_ReplacesTheTileAndKeepsTheSelection()
+    {
+        WallpaperFixture.Create(tmp, "waves", "Waves");
+        var vm = await CreateConnectedAsync();
+        var rain = vm.LibraryItems.Single(x => x.Title == "Rain");
+        vm.SelectedItem = rain;
+        var folder = rain.LivelyInfoFolderPath;
+        File.WriteAllText(Path.Combine(folder, "thumbnail.jpg"), "jpeg");
+        var info = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(Path.Combine(folder, "LivelyInfo.json")));
+        info["Thumbnail"] = "thumbnail.jpg";
+        File.WriteAllText(Path.Combine(folder, "LivelyInfo.json"), info.ToString());
+
+        core.RaiseWallpaperUpdated(folder);
+
+        var tile = vm.LibraryItems[0];
+        Assert.NotSame(rain, tile);
+        Assert.Equal(["Rain", "Waves"], vm.LibraryItems.Select(x => x.Title));
+        Assert.Equal(Path.Combine(folder, "thumbnail.jpg"), tile.ImagePath);
+        Assert.Same(tile, vm.SelectedItem);
+    }
+
+    [Fact]
+    public async Task WallpaperUpdated_OfAnUnselectedTile_KeepsTheSelection()
+    {
+        WallpaperFixture.Create(tmp, "waves", "Waves");
+        var vm = await CreateConnectedAsync();
+        var waves = vm.LibraryItems[1];
+        vm.SelectedItem = vm.LibraryItems[0];
+
+        core.RaiseWallpaperUpdated(waves.LivelyInfoFolderPath + "/");
+
+        Assert.NotSame(waves, vm.LibraryItems[1]);
+        Assert.Same(vm.LibraryItems[0], vm.SelectedItem);
+    }
+
+    [Fact]
+    public async Task WallpaperUpdated_UnknownOrUnreadableFolder_IsIgnored()
+    {
+        var vm = await CreateConnectedAsync();
+        var before = vm.LibraryItems.ToList();
+        using var other = new TempDirectory();
+        var elsewhere = WallpaperFixture.Create(other, "storm", "Storm");
+
+        core.RaiseWallpaperUpdated(elsewhere);
+        File.Delete(Path.Combine(before[0].LivelyInfoFolderPath, "LivelyInfo.json"));
+        core.RaiseWallpaperUpdated(before[0].LivelyInfoFolderPath);
+
+        Assert.Equal(before, vm.LibraryItems);
+    }
+
+    [Fact]
     public async Task DisplaysChanged_ReloadsAndKeepsTheSelection()
     {
         var vm = await CreateConnectedAsync();

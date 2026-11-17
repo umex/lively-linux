@@ -63,5 +63,8 @@ namespace lively.Ipc
 
         /// <summary>The wallpapers were paused (true) or resumed (false).</summary>
         event EventHandler<bool>? PausedChanged;
+
+        /// <summary>A wallpaper folder's LivelyInfo.json changed (a web wallpaper got its thumbnail).</summary>
+        event EventHandler<CoreWallpaperUpdatedEventArgs>? WallpaperUpdated;
     }
 }

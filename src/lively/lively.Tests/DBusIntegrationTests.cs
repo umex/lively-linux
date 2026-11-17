@@ -76,11 +76,11 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     }
 
     /// <summary>Starts the server (with fake players unless a factory is given) and a connected client.</summary>
-    private async Task StartAsync(IWallpaperPlayerFactory? factory = null)
+    private async Task StartAsync(IWallpaperPlayerFactory? factory = null, CoreOptions? options = null)
     {
         rain = WallpaperFixture.Create(tmp, "rain", "Rain");
         waves = WallpaperFixture.Create(tmp, "waves", "Waves");
-        service = new WallpaperService(displays, factory ?? fakeFactory, store);
+        service = new WallpaperService(displays, factory ?? fakeFactory, store, null, options);
         await StartServerAsync(service);
 
         client = new CoreClient(await ConnectAsync(), busName);
@@ -345,6 +345,24 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
         Assert.Equal("\"file:///etc/passwd\" is not a web address; it must start with http:// or https://.", e.ErrorMessage);
         Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.AddUrlAsync("")));
         Assert.False(Directory.Exists(tmp.Combine("library", "wallpapers")));
+    }
+
+    [DBusFact]
+    public async Task WallpaperUpdated_IsSignalledWhenAWebWallpaperGetsItsThumbnail()
+    {
+        await StartAsync(options: new CoreOptions { WallpapersDirectory = tmp.Combine("library", "wallpapers") });
+        var updated = new ConcurrentQueue<string>();
+        client.WallpaperUpdated += (_, e) => updated.Enqueue(e.FolderPath);
+        var folder = await client.AddUrlAsync("https://example.com/");
+        await client.SetWallpaperAsync(folder, "DP-1");
+        var player = Assert.Single(fakeFactory.Created);
+        var request = Assert.IsType<lively.Models.Message.LivelyScreenshotCmd>(Assert.Single(player.Sent));
+
+        File.WriteAllText(request.FilePath, "jpeg");
+        player.RaiseMessage(new lively.Models.Message.LivelyMessageScreenshot { FileName = "thumbnail.jpg", Success = true });
+
+        await Wait.UntilAsync(() => updated.Contains(folder), "WallpaperUpdated signal");
+        Assert.Equal(Path.Combine(folder, "thumbnail.jpg"), LibraryScanner.ScanFolder(folder)?.ThumbnailPath);
     }
 
     [DBusFact]
