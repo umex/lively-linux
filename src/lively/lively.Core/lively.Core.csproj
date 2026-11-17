@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="lively.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <AdditionalFiles Include="..\lively.Ipc\dbus-xml\io.github.lively_linux.Core1.xml" Link="DBus\io.github.lively_linux.Core1.xml" DBusGeneratorMode="Handler" Namespace="lively.Core.DBus" Visibility="internal" />
   </ItemGroup>
 

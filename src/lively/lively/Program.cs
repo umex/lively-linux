@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using lively.Core.Logging;
+using lively.Helpers;
 using lively.Services;
 
 namespace lively
@@ -19,7 +20,16 @@ namespace lively
             using var instance = SingleInstance.Acquire();
             if (!instance.IsPrimary)
             {
-                instance.ActivatePrimary(TimeSpan.FromSeconds(5));
+                // Video files on the command line are imported by the running instance.
+                var files = FileUris.CommandLinePaths(args);
+                if (files.Count > 0)
+                {
+                    instance.OpenPrimary(FileUris.ToUris(files), TimeSpan.FromSeconds(5));
+                }
+                else
+                {
+                    instance.ActivatePrimary(TimeSpan.FromSeconds(5));
+                }
                 return 0;
             }
 

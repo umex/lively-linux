@@ -212,6 +212,54 @@ public sealed class LibraryViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task ImportVideos_CallsCoreAndAddsItems()
+    {
+        using var library = new TempDirectory();
+        WallpaperFixture.Create(tmp, "waves", "Waves");
+        var vm = await CreateConnectedAsync();
+        core.ImportResultFolder = WallpaperFixture.Create(library, "storm", "Storm");
+        var statuses = new List<string?>();
+        vm.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(LibraryViewModel.StatusMessage))
+            {
+                statuses.Add(vm.StatusMessage);
+            }
+        };
+
+        await vm.ImportVideosAsync(["/videos/storm.mp4"]);
+
+        Assert.Equal([("ImportVideo", "/videos/storm.mp4", "")], core.Calls);
+        Assert.Equal(["Rain", "Storm", "Waves"], vm.LibraryItems.Select(x => x.Title));
+        Assert.Same(vm.LibraryItems[1], vm.SelectedItem);
+        Assert.Equal(["Importing storm.mp4…", "Imported 1 wallpaper(s)."], statuses);
+    }
+
+    [Fact]
+    public async Task ImportVideos_ErrorGoesToStatusMessage()
+    {
+        var vm = await CreateConnectedAsync();
+        core.CallError = new DBusErrorReplyException(CoreErrors.ImportFailed, "\"a.mp4\" has no video stream.");
+
+        await vm.ImportVideosAsync(["/videos/a.mp4", "/videos/b.mp4"]);
+
+        // The second file is still tried after the first failed.
+        Assert.Equal([("ImportVideo", "/videos/a.mp4", ""), ("ImportVideo", "/videos/b.mp4", "")], core.Calls);
+        Assert.Equal("Could not import b.mp4: \"a.mp4\" has no video stream.", vm.StatusMessage);
+        Assert.Equal(["Rain"], vm.LibraryItems.Select(x => x.Title));
+    }
+
+    [Fact]
+    public async Task ImportVideos_WithoutCore_ReportsUnavailable()
+    {
+        var vm = new LibraryViewModel(null, [tmp.Path]);
+
+        await vm.ImportVideosAsync(["/videos/a.mp4"]);
+
+        Assert.Equal("lively-daemon is not reachable.", vm.StatusMessage);
+    }
+
+    [Fact]
     public async Task DisplaysChanged_ReloadsAndKeepsTheSelection()
     {
         var vm = await CreateConnectedAsync();

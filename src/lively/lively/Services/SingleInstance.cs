@@ -61,6 +61,47 @@ namespace lively.Services
             {
                 return false;
             }
+            try
+            {
+                CreateProxy(Connection).ActivateAsync(CreatePlatformData()).WaitAsync(timeout).GetAwaiter().GetResult();
+                Logger.Info("Lively is already running, activated the existing window.");
+                return true;
+            }
+            catch (Exception e) when (e is DBusExceptionBase or TimeoutException)
+            {
+                Logger.Warn("Lively is already running but could not be activated: " + e.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Asks the primary instance to import the files (org.freedesktop.Application.Open with file:// URIs)
+        /// and show its window, forwarding the activation token of this launch.
+        /// </summary>
+        public bool OpenPrimary(IReadOnlyList<string> uris, TimeSpan timeout)
+        {
+            if (Connection == null)
+            {
+                return false;
+            }
+            try
+            {
+                CreateProxy(Connection).OpenAsync([.. uris], CreatePlatformData()).WaitAsync(timeout).GetAwaiter().GetResult();
+                Logger.Info("Lively is already running, passed the files to the existing window: " + string.Join(", ", uris));
+                return true;
+            }
+            catch (Exception e) when (e is DBusExceptionBase or TimeoutException)
+            {
+                Logger.Warn("Lively is already running but could not open the files: " + e.Message);
+                return false;
+            }
+        }
+
+        private static lively.Ipc.DBus.FreeDesktop.Application CreateProxy(DBusConnection connection) =>
+            new(connection, Constants.DBus.UiBusName, Constants.DBus.UiObjectPath);
+
+        private static Dictionary<string, VariantValue> CreatePlatformData()
+        {
             var platformData = new Dictionary<string, VariantValue>();
             var token = Environment.GetEnvironmentVariable("XDG_ACTIVATION_TOKEN");
             if (!string.IsNullOrEmpty(token))
@@ -72,19 +113,7 @@ namespace lively.Services
             {
                 platformData["desktop-startup-id"] = startupId;
             }
-
-            try
-            {
-                var app = new lively.Ipc.DBus.FreeDesktop.Application(Connection, Constants.DBus.UiBusName, Constants.DBus.UiObjectPath);
-                app.ActivateAsync(platformData).WaitAsync(timeout).GetAwaiter().GetResult();
-                Logger.Info("Lively is already running, activated the existing window.");
-                return true;
-            }
-            catch (Exception e) when (e is DBusExceptionBase or TimeoutException)
-            {
-                Logger.Warn("Lively is already running but could not be activated: " + e.Message);
-                return false;
-            }
+            return platformData;
         }
 
         public void Dispose()

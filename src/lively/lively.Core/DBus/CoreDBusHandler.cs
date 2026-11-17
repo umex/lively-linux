@@ -23,16 +23,18 @@ namespace lively.Core.DBus
         private readonly IWallpaperService wallpaperService;
         private readonly IDisplayManager displayManager;
         private readonly ISettingsService settingsService;
+        private readonly VideoImporter importer;
         private readonly Action quit;
         private bool attached;
 
         public CoreDBusHandler(DBusConnection connection, string path, IWallpaperService wallpaperService,
-            IDisplayManager displayManager, ISettingsService settingsService, Action quit)
+            IDisplayManager displayManager, ISettingsService settingsService, VideoImporter importer, Action quit)
             : base(connection, path, handlesChildPaths: false, synchronizationContext: new SynchronizationContext())
         {
             this.wallpaperService = wallpaperService;
             this.displayManager = displayManager;
             this.settingsService = settingsService;
+            this.importer = importer;
             this.quit = quit;
         }
 
@@ -143,6 +145,27 @@ namespace lively.Core.DBus
         public ValueTask<bool> GetPausedAsync()
         {
             return ValueTask.FromResult(wallpaperService.IsPaused);
+        }
+
+        public async ValueTask<string> ImportVideoAsync(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !System.IO.Path.IsPathRooted(path))
+            {
+                throw new DBusErrorReplyException(CoreErrors.ImportFailed, $"\"{path}\" is not an absolute file path.");
+            }
+            if (!File.Exists(path))
+            {
+                throw new DBusErrorReplyException(CoreErrors.ImportFailed, $"\"{path}\" does not exist.");
+            }
+            Logger.Info($"D-Bus ImportVideo {path}.");
+            try
+            {
+                return await importer.ImportAsync(path).ConfigureAwait(false);
+            }
+            catch (VideoImportException e)
+            {
+                throw new DBusErrorReplyException(CoreErrors.ImportFailed, e.Message);
+            }
         }
 
         public ValueTask QuitAsync()

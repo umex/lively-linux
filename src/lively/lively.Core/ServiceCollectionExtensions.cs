@@ -34,6 +34,8 @@ namespace lively.Core
             services.AddSingleton(sp => CreateDesktopBackend(options, sp.GetRequiredService<DesktopSession>(), sp.GetRequiredService<WaylandStartupSnapshot>()));
             services.AddSingleton<IWallpaperPlayerFactory, WallpaperPlayerFactory>();
             services.AddSingleton<IWallpaperService, WallpaperService>();
+            // Video import into the library (needs ffmpeg/ffprobe on PATH at import time).
+            services.AddSingleton(_ => new Library.VideoImporter(options.WallpapersDirectory));
             return services;
         }
 

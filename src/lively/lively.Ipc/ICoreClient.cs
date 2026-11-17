@@ -37,6 +37,11 @@ namespace lively.Ipc
 
         Task<bool> GetPausedAsync();
 
+        /// <summary>Copies a video file into the library.</summary>
+        /// <param name="path">Absolute path of the video file.</param>
+        /// <returns>The new wallpaper folder.</returns>
+        Task<string> ImportVideoAsync(string path);
+
         /// <summary>Asks the daemon to close its wallpapers and exit.</summary>
         Task QuitAsync();
 

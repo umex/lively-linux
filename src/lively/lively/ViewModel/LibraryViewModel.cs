@@ -248,6 +248,51 @@ namespace lively
             }
         }
 
+        /// <summary>
+        /// Imports the video files one after another through the core, adds each new wallpaper to the library
+        /// and selects it. A failed file is reported and the next one is tried.
+        /// </summary>
+        public async Task ImportVideosAsync(IReadOnlyList<string> paths)
+        {
+            if (paths.Count == 0)
+            {
+                return;
+            }
+            if (core == null)
+            {
+                StatusMessage = "lively-daemon is not reachable.";
+                return;
+            }
+            var imported = 0;
+            string? lastError = null;
+            foreach (var path in paths)
+            {
+                var name = System.IO.Path.GetFileName(path);
+                StatusMessage = $"Importing {name}…";
+                try
+                {
+                    var folder = await core.ImportVideoAsync(path);
+                    var item = AddWallpaper(folder)
+                        ?? throw new InvalidOperationException($"the imported folder {folder} is not readable.");
+                    SelectedItem = item;
+                    imported++;
+                }
+                catch (Exception e)
+                {
+                    Logger.Error($"ImportVideo {path} failed: {e.Message}");
+                    lastError = $"Could not import {name}: {Describe(e)}";
+                }
+            }
+            if (lastError == null)
+            {
+                StatusMessage = $"Imported {imported} wallpaper(s).";
+            }
+            else
+            {
+                StatusMessage = imported == 0 ? lastError : $"Imported {imported} of {paths.Count} wallpaper(s). {lastError}";
+            }
+        }
+
         private async Task ReloadDisplaysAsync()
         {
             if (core == null)
@@ -301,13 +346,15 @@ namespace lively
 
         #region helpers
 
-        public void AddWallpaper(string folderPath)
+        /// <returns>The added item, null when the folder is not a readable wallpaper.</returns>
+        public LibraryModel? AddWallpaper(string folderPath)
         {
             var libItem = LibraryScanner.ScanFolder(folderPath);
             if (libItem != null)
             {
                 LibraryItems.Insert(LibraryScanner.FindInsertIndex(LibraryItems, libItem.Title), libItem);
             }
+            return libItem;
         }
 
         public void SortLibraryItem(LibraryModel item)
