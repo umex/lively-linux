@@ -47,11 +47,14 @@ handlers in `lively.Core` and `lively`). The constants live in `lively.Common/Co
 | `CloseWallpaper` | `s` (display) → | Closes the wallpaper on `display` and removes it from the layout. An unknown id is not an error (it may belong to an unplugged display). |
 | `CloseAllWallpapers` | → | Closes every wallpaper and clears the layout. |
 | `GetSettings` | → `s` | Settings as JSON. |
-| `SetSettings` | `s` → | Replaces the settings with the given JSON object and saves them. |
+| `SetSettings` | `s` → | Replaces the settings with the given JSON object and saves them. A changed `WallpaperVolume` applies to the running wallpapers at once. |
+| `SetPaused` | `b` → | Pauses (`true`) or resumes (`false`) every wallpaper. Wallpapers started while paused start paused. Not persisted. |
+| `GetPaused` | → `b` | Whether the wallpapers are paused. |
 | `Quit` | → | Closes the wallpapers (the layout is kept) and exits the daemon. |
 | signal `WallpaperChanged` | `ss` (display, folder) | A wallpaper started, or closed when `folder` is `""`. Sent for every change, also for those made by other clients, restores and crashed players. |
 | signal `DisplaysChanged` | | The display list changed; call `GetDisplays`. |
 | signal `Error` | `ss` (display, message) | A player failed to load or exited unexpectedly. |
+| signal `PausedChanged` | `b` (paused) | The paused state changed (sent only on a change). |
 
 Rules:
 
@@ -82,7 +85,7 @@ Rules:
 `SettingsModel` serialized by Newtonsoft.Json, compact:
 
 ```json
-{"AppVersion":"1.0.0.0","Language":"en-US","Startup":false,"IsFirstRun":true}
+{"AppVersion":"1.0.0.0","Language":"en-US","Startup":false,"IsFirstRun":true,"WallpaperVolume":0}
 ```
 
 `SetSettings` replaces the whole object; missing properties get their defaults.
@@ -122,6 +125,9 @@ busctl --user call $D GetWallpapers
 busctl --user call $D CloseWallpaper s DP-1
 busctl --user call $D GetSettings
 busctl --user call $D SetSettings s '{"Language":"de-DE"}'
+busctl --user call $D SetPaused b true
+busctl --user call $D GetPaused
+# b true
 busctl --user call $D Quit
 busctl --user monitor io.github.lively_linux.Daemon          # watch calls and signals
 ```
@@ -141,7 +147,7 @@ The core starts the player with `ProcessStartInfo.ArgumentList` (no shell):
 | `--wallpaper-type <WallpaperType name>` | `video` |
 | `--wallpaper-display <output name>` | `DP-1` |
 | `--wallpaper-geometry <W>x<H>` | `2560x1440` |
-| `--wallpaper-volume <0-100>` | `100` |
+| `--wallpaper-volume <0-100>` | `0` (the `WallpaperVolume` setting) |
 | backend arguments | `--wallpaper-backend wayland --wallpaper-output DP-1 --wallpaper-desktop kde` |
 
 Players must ignore `--wallpaper-*` arguments they do not know. The dummy player additionally

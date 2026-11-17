@@ -36,6 +36,8 @@ namespace lively.Ipc
 
         public event EventHandler<CoreErrorEventArgs>? Error;
 
+        public event EventHandler<bool>? PausedChanged;
+
         public async Task ConnectAsync(CancellationToken ct = default)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
@@ -53,6 +55,10 @@ namespace lively.Ipc
             ct.ThrowIfCancellationRequested();
             watchers.Add(await proxy.WatchErrorAsync(
                 e => Post(() => Error?.Invoke(this, new CoreErrorEventArgs(e.Display, e.Message))),
+                emitOnCapturedContext: false).ConfigureAwait(false));
+            ct.ThrowIfCancellationRequested();
+            watchers.Add(await proxy.WatchPausedChangedAsync(
+                paused => Post(() => PausedChanged?.Invoke(this, paused)),
                 emitOnCapturedContext: false).ConfigureAwait(false));
             connected = true;
         }
@@ -96,6 +102,10 @@ namespace lively.Ipc
             ArgumentNullException.ThrowIfNull(settings);
             return proxy.SetSettingsAsync(JsonConvert.SerializeObject(settings, Formatting.None));
         }
+
+        public Task SetPausedAsync(bool paused) => proxy.SetPausedAsync(paused);
+
+        public Task<bool> GetPausedAsync() => proxy.GetPausedAsync();
 
         public Task QuitAsync() => proxy.QuitAsync();
 

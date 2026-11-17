@@ -160,6 +160,58 @@ public sealed class LibraryViewModelTests : IDisposable
     }
 
     [Fact]
+    public async Task Initialize_ReadsThePausedState()
+    {
+        core.Paused = true;
+
+        var vm = await CreateConnectedAsync();
+
+        Assert.True(vm.IsPaused);
+        Assert.Equal("Resume", vm.PauseButtonText);
+    }
+
+    [Fact]
+    public async Task TogglePause_CallsCoreAndFollowsSignal()
+    {
+        var posted = 0;
+        WallpaperFixture.Create(tmp, "rain", "Rain");
+        var vm = new LibraryViewModel(core, [tmp.Path], a => { posted++; a(); });
+        await vm.InitializeAsync();
+        Assert.False(vm.IsPaused);
+        Assert.Equal("Pause", vm.PauseButtonText);
+        var notified = new List<string?>();
+        vm.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
+
+        await vm.TogglePauseCommand.ExecuteAsync(null);
+
+        Assert.Equal([("SetPaused", "True", "")], core.Calls);
+        Assert.False(vm.IsPaused); // follows the signal, not the call
+
+        core.RaisePausedChanged(true);
+
+        Assert.Equal(1, posted);
+        Assert.True(vm.IsPaused);
+        Assert.Equal("Resume", vm.PauseButtonText);
+        Assert.Contains(nameof(LibraryViewModel.PauseButtonText), notified);
+
+        await vm.TogglePauseCommand.ExecuteAsync(null);
+
+        Assert.Equal(("SetPaused", "False", ""), core.Calls[^1]);
+    }
+
+    [Fact]
+    public async Task TogglePause_ClientError_GoesToStatusMessage()
+    {
+        var vm = await CreateConnectedAsync();
+        core.CallError = new DBusErrorReplyException(CoreErrors.Failed, "daemon is shutting down");
+
+        await vm.TogglePauseCommand.ExecuteAsync(null);
+
+        Assert.Equal("Could not pause the wallpapers: daemon is shutting down", vm.StatusMessage);
+        Assert.False(vm.IsPaused);
+    }
+
+    [Fact]
     public async Task DisplaysChanged_ReloadsAndKeepsTheSelection()
     {
         var vm = await CreateConnectedAsync();

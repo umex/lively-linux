@@ -35,12 +35,18 @@ namespace lively.Core.Wallpapers
     /// </summary>
     /// <remarks>
     /// Events are raised while the service's internal lock is held, so handlers must not wait on calls
-    /// into the service.
+    /// into the service. Pause and volume apply to every running player and to players started later.
     /// </remarks>
     public interface IWallpaperService
     {
         /// <summary>Snapshot of the running players.</summary>
         IReadOnlyList<IWallpaperPlayer> Wallpapers { get; }
+
+        /// <summary>True while the wallpapers are paused (suspended).</summary>
+        bool IsPaused { get; }
+
+        /// <summary>Volume of the wallpapers, 0-100.</summary>
+        int Volume { get; }
 
         /// <summary>
         /// Replaces the wallpaper on <paramref name="display"/> and records it in the layout.
@@ -59,11 +65,26 @@ namespace lively.Core.Wallpapers
         /// <summary>Starts the layout's wallpapers on the displays that are present and not running one.</summary>
         Task RestoreWallpaperAsync(CancellationToken ct = default);
 
+        /// <summary>Pauses or resumes every running wallpaper; wallpapers started later follow the state.</summary>
+        /// <exception cref="ObjectDisposedException">The service has been shut down.</exception>
+        Task SetPausedAsync(bool paused);
+
+        /// <summary>Sets the volume of every running wallpaper and of those started later.</summary>
+        /// <param name="volume">Clamped to 0-100.</param>
+        /// <exception cref="ObjectDisposedException">The service has been shut down.</exception>
+        Task SetVolumeAsync(int volume);
+
         /// <summary>Closes every player without touching the layout; the service is unusable afterwards.</summary>
         Task ShutdownAsync();
 
         event EventHandler<WallpaperChangedEventArgs>? WallpaperChanged;
 
         event EventHandler<WallpaperErrorEventArgs>? WallpaperError;
+
+        /// <summary>
+        /// <see cref="IsPaused"/> changed; the argument is the new value. Raised only on a change, with the
+        /// service's lock held like the other events, so handlers must not call back into the service.
+        /// </summary>
+        event EventHandler<bool>? PausedChanged;
     }
 }

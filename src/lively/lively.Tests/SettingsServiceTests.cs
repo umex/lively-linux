@@ -15,6 +15,7 @@ public class SettingsServiceTests
         var service = new JsonSettingsService(path);
 
         Assert.True(service.Settings.IsFirstRun);
+        Assert.Equal(0, service.Settings.WallpaperVolume);
         Assert.True(File.Exists(path));
     }
 

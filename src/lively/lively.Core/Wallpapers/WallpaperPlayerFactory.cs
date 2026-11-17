@@ -9,7 +9,6 @@ namespace lively.Core.Wallpapers
     public sealed class WallpaperPlayerFactory : IWallpaperPlayerFactory
     {
         public const string DummyPlayerName = "lively-player-dummy";
-        public const int DefaultVolume = 100;
 
         private readonly CoreOptions options;
         private readonly IDesktopBackend backend;
@@ -20,8 +19,10 @@ namespace lively.Core.Wallpapers
             this.backend = backend;
         }
 
-        public IWallpaperPlayer Create(LibraryModel model, DisplayMonitor display)
+        public IWallpaperPlayer Create(LibraryModel model, DisplayMonitor display, PlaybackState state)
         {
+            ArgumentNullException.ThrowIfNull(state);
+            var volume = Math.Clamp(state.Volume, 0, 100);
             var url = model.FilePath;
             if (string.IsNullOrEmpty(url))
             {
@@ -34,7 +35,7 @@ namespace lively.Core.Wallpapers
                 "--wallpaper-type", model.LivelyInfo.Type.ToString(),
                 "--wallpaper-display", display.Id,
                 "--wallpaper-geometry", $"{display.Width}x{display.Height}",
-                "--wallpaper-volume", DefaultVolume.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                "--wallpaper-volume", volume.ToString(System.Globalization.CultureInfo.InvariantCulture),
             };
             args.AddRange(backend.GetPlayerArguments(display));
             args.Add("--dummy-log");
@@ -49,7 +50,7 @@ namespace lively.Core.Wallpapers
             {
                 throw new WallpaperPlayerException(e.Message, e);
             }
-            return new ProcessWallpaperPlayer(launch, model, display, options.PlayerLoadTimeout, options.PlayerCloseTimeout, DefaultVolume);
+            return new ProcessWallpaperPlayer(launch, model, display, options.PlayerLoadTimeout, options.PlayerCloseTimeout, volume);
         }
 
         private static string SafeFileName(string name)

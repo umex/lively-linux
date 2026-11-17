@@ -16,13 +16,17 @@ public sealed class FakeWallpaperPlayerFactory : IWallpaperPlayerFactory
 
     public IReadOnlyList<FakeWallpaperPlayer> Created => created.ToArray();
 
-    public IWallpaperPlayer Create(LibraryModel model, DisplayMonitor display)
+    /// <summary>State passed to the last Create call.</summary>
+    public PlaybackState? LastState { get; private set; }
+
+    public IWallpaperPlayer Create(LibraryModel model, DisplayMonitor display, PlaybackState state)
     {
+        LastState = state;
         if (CreateError != null)
         {
             throw CreateError;
         }
-        var player = new FakeWallpaperPlayer(model, display);
+        var player = new FakeWallpaperPlayer(model, display) { State = state };
         Configure?.Invoke(player);
         created.Enqueue(player);
         return player;

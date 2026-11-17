@@ -6,6 +6,7 @@ using lively.Core.Library;
 using lively.Core.Settings;
 using lively.Core.Wallpapers;
 using lively.Models;
+using lively.Models.Message;
 using lively.Tests.Fakes;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -33,9 +34,9 @@ public sealed class WallpaperServiceTests : IDisposable
         tmp.Dispose();
     }
 
-    private WallpaperService CreateService(MemoryLayoutStore store)
+    private WallpaperService CreateService(MemoryLayoutStore store, ISettingsService? settings = null)
     {
-        var service = new WallpaperService(displays, factory, store);
+        var service = new WallpaperService(displays, factory, store, settings);
         service.WallpaperChanged += (_, e) => changed.Enqueue((e.DisplayId, e.FolderPath));
         service.WallpaperError += (_, e) => errors.Enqueue((e.DisplayId, e.Error));
         return service;
@@ -278,7 +279,96 @@ public sealed class WallpaperServiceTests : IDisposable
     }
 
     [Fact]
-    public void AddLivelyCore_WithFakeDisplays_ResolvesEverything()
+    public async Task SetPaused_PausesAllPlayersAndRaisesOnce()
+    {
+        var service = CreateService(new MemoryLayoutStore());
+        var raised = new ConcurrentQueue<bool>();
+        service.PausedChanged += (_, paused) => raised.Enqueue(paused);
+        await service.SetWallpaperAsync(Model(rain), Display("DP-1"));
+        await service.SetWallpaperAsync(Model(waves), Display("DP-2"));
+
+        await service.SetPausedAsync(true);
+        await service.SetPausedAsync(true); // no change: nothing sent or raised
+
+        Assert.True(service.IsPaused);
+        Assert.Equal(2, factory.Created.Count);
+        Assert.All(factory.Created, p => Assert.IsType<LivelySuspendCmd>(Assert.Single(p.Sent)));
+        Assert.Equal([true], raised);
+
+        await service.SetPausedAsync(false);
+
+        Assert.False(service.IsPaused);
+        Assert.All(factory.Created, p => Assert.IsType<LivelyResumeCmd>(p.Sent.Last()));
+        Assert.Equal([true, false], raised);
+    }
+
+    [Fact]
+    public async Task SetWallpaper_WhilePaused_NewPlayerIsPaused()
+    {
+        var service = CreateService(new MemoryLayoutStore());
+        await service.SetPausedAsync(true);
+
+        await service.SetWallpaperAsync(Model(rain), Display("DP-1"));
+
+        var player = Assert.Single(factory.Created);
+        Assert.Equal(new PlaybackState(0, true), player.State);
+        Assert.IsType<LivelySuspendCmd>(Assert.Single(player.Sent));
+    }
+
+    [Fact]
+    public async Task SetVolume_AppliesToRunningAndNewPlayers()
+    {
+        var service = CreateService(new MemoryLayoutStore());
+        await service.SetWallpaperAsync(Model(rain), Display("DP-1"));
+        Assert.Equal(new PlaybackState(0, false), factory.LastState);
+
+        await service.SetVolumeAsync(30);
+        await service.SetWallpaperAsync(Model(waves), Display("DP-2"));
+
+        Assert.Equal(30, service.Volume);
+        Assert.Equal(30, Assert.IsType<LivelyVolumeCmd>(Assert.Single(factory.Created[0].Sent)).Volume);
+        Assert.Equal(new PlaybackState(30, false), factory.Created[1].State);
+        Assert.Empty(factory.Created[1].Sent);
+
+        await service.SetVolumeAsync(150);
+
+        Assert.Equal(100, service.Volume);
+        Assert.All(factory.Created, p => Assert.Equal(100, Assert.IsType<LivelyVolumeCmd>(p.Sent.Last()).Volume));
+    }
+
+    [Fact]
+    public async Task SettingsChange_UpdatesVolume()
+    {
+        var settings = new JsonSettingsService(tmp.Combine("config", "Settings.json"));
+        settings.Replace(new SettingsModel { WallpaperVolume = 25 });
+        var service = CreateService(new MemoryLayoutStore(), settings);
+        Assert.Equal(25, service.Volume);
+        await service.SetWallpaperAsync(Model(rain), Display("DP-1"));
+        var player = Assert.Single(factory.Created);
+        Assert.Equal(new PlaybackState(25, false), player.State);
+
+        settings.Replace(new SettingsModel { WallpaperVolume = 40 });
+
+        await Wait.UntilAsync(() => service.Volume == 40, "volume from the settings");
+        Assert.Equal(40, Assert.IsType<LivelyVolumeCmd>(Assert.Single(player.Sent)).Volume);
+
+        await service.ShutdownAsync();
+        settings.Replace(new SettingsModel { WallpaperVolume = 50 }); // unsubscribed: no effect, no error
+        Assert.Equal(40, service.Volume);
+    }
+
+    [Fact]
+    public async Task SetPausedAndVolume_AfterShutdown_Throw()
+    {
+        var service = CreateService(new MemoryLayoutStore());
+        await service.ShutdownAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => service.SetPausedAsync(true));
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => service.SetVolumeAsync(10));
+    }
+
+    [Fact]
+    public async Task AddLivelyCore_WithFakeDisplays_ResolvesEverything()
     {
         using var provider = new ServiceCollection()
             .AddLivelyCore(o =>
@@ -298,6 +388,10 @@ public sealed class WallpaperServiceTests : IDisposable
         Assert.NotNull(provider.GetRequiredService<IDesktopBackend>());
         Assert.True(provider.GetRequiredService<ISettingsService>().Settings.IsFirstRun);
         Assert.Same(provider.GetRequiredService<CoreOptions>(), provider.GetRequiredService<CoreOptions>());
+
+        // The service follows the registered settings.
+        provider.GetRequiredService<ISettingsService>().Replace(new SettingsModel { WallpaperVolume = 70 });
+        await Wait.UntilAsync(() => provider.GetRequiredService<IWallpaperService>().Volume == 70, "volume from the settings");
     }
 
     [Fact]

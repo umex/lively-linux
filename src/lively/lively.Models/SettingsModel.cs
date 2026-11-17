@@ -15,6 +15,8 @@ namespace lively.Models
         public string Language { get; set; }
         public bool Startup { get; set; }
         public bool IsFirstRun { get; set; }
+        /// <summary>Volume of every running wallpaper, 0-100. 0 (muted) by default.</summary>
+        public int WallpaperVolume { get; set; } = 0;
 
         public SettingsModel()
         {

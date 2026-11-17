@@ -49,6 +49,7 @@ namespace lively
                 core.WallpaperChanged += (_, e) => this.post(() => OnWallpaperChanged(e));
                 core.Error += (_, e) => this.post(() => StatusMessage = $"Error on {e.DisplayId}: {e.Message}");
                 core.DisplaysChanged += (_, _) => this.post(() => _ = ReloadDisplaysAsync());
+                core.PausedChanged += (_, paused) => this.post(() => IsPaused = paused);
             }
         }
 
@@ -100,6 +101,23 @@ namespace lively
             private set { SetProperty(ref _isCoreAvailable, value); }
         }
 
+        private bool _isPaused;
+        /// <summary>True while the core has the wallpapers paused, as last reported by the core.</summary>
+        public bool IsPaused
+        {
+            get { return _isPaused; }
+            private set
+            {
+                if (SetProperty(ref _isPaused, value))
+                {
+                    OnPropertyChanged(nameof(PauseButtonText));
+                }
+            }
+        }
+
+        /// <summary>Label of the pause button: what pressing it does.</summary>
+        public string PauseButtonText => IsPaused ? "Resume" : "Pause";
+
         #endregion //status
 
         #region core
@@ -122,6 +140,7 @@ namespace lively
                     running[w.DisplayId] = w.FolderPath;
                 }
                 OnPropertyChanged(nameof(RunningWallpapers));
+                IsPaused = await core.GetPausedAsync();
                 IsCoreAvailable = true;
                 StatusMessage = running.Count == 0
                     ? "Ready. Right-click a wallpaper and choose Set Wallpaper."
@@ -205,6 +224,27 @@ namespace lively
             catch (Exception e)
             {
                 StatusMessage = "Could not close the wallpapers: " + Describe(e);
+            }
+        }
+
+        [RelayCommand]
+        private async Task TogglePause()
+        {
+            if (core == null)
+            {
+                StatusMessage = "lively-daemon is not reachable.";
+                return;
+            }
+            var pause = !IsPaused;
+            try
+            {
+                // IsPaused follows the PausedChanged signal.
+                await core.SetPausedAsync(pause);
+                StatusMessage = pause ? "Wallpapers paused." : "Wallpapers resumed.";
+            }
+            catch (Exception e)
+            {
+                StatusMessage = (pause ? "Could not pause the wallpapers: " : "Could not resume the wallpapers: ") + Describe(e);
             }
         }
 
