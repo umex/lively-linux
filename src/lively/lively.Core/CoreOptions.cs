@@ -10,6 +10,9 @@ namespace lively.Core
         public string SettingsPath { get; set; } = Constants.CommonPaths.UserSettingsPath;
         public string LayoutPath { get; set; } = Constants.CommonPaths.WallpaperLayoutPath;
 
+        /// <summary>Where imported wallpapers are created. Same folder as LibraryScanner.DefaultScanFolders[0].</summary>
+        public string WallpapersDirectory { get; set; } = Path.Combine(Constants.CommonPaths.LibraryDir, "wallpapers");
+
         /// <summary>Time a player has to report msg_wploaded. Kept below the 25 s D-Bus call timeout.</summary>
         public TimeSpan PlayerLoadTimeout { get; set; } = TimeSpan.FromSeconds(15);
 

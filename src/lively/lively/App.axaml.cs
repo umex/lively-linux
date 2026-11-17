@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia;
@@ -7,6 +8,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using lively.Common;
 using lively.Core.Library;
+using lively.Helpers;
 using lively.Ipc;
 using lively.Services;
 using Microsoft.Extensions.DependencyInjection;
@@ -39,20 +41,24 @@ namespace lively
             var connection = Program.Instance?.Connection;
             Services = ConfigureServices(connection);
 
+            IReadOnlyList<string> startupFiles = [];
             if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             {
                 desktop.MainWindow = Services.GetRequiredService<MainWindow>();
                 if (connection != null)
                 {
-                    // Created here, on the UI thread, so Activate runs on Avalonia's dispatcher.
-                    activationHandler = new ApplicationActivationHandler(connection, () => desktop.MainWindow);
+                    // Created here, on the UI thread, so Activate and Open run on Avalonia's dispatcher.
+                    var library = Services.GetRequiredService<LibraryViewModel>();
+                    activationHandler = new ApplicationActivationHandler(connection, () => desktop.MainWindow,
+                        paths => library.ImportVideosAsync(paths));
                     connection.AddMethodHandler(activationHandler);
                 }
                 desktop.Exit += (_, _) => OnExit();
+                startupFiles = FileUris.CommandLinePaths(desktop.Args ?? []);
             }
 
             base.OnFrameworkInitializationCompleted();
-            _ = InitializeCoreAsync(connection);
+            _ = InitializeCoreAsync(connection, startupFiles);
         }
 
         private static IServiceProvider ConfigureServices(DBusConnection? connection)
@@ -71,7 +77,8 @@ namespace lively
             return services.BuildServiceProvider();
         }
 
-        private static async Task InitializeCoreAsync(DBusConnection? connection)
+        /// <param name="startupFiles">Video files from the command line, imported once the core is reachable.</param>
+        private static async Task InitializeCoreAsync(DBusConnection? connection, IReadOnlyList<string> startupFiles)
         {
             var library = Services.GetRequiredService<LibraryViewModel>();
             try
@@ -82,6 +89,10 @@ namespace lively
                     return;
                 }
                 await library.InitializeAsync();
+                if (library.IsCoreAvailable && startupFiles.Count > 0)
+                {
+                    await library.ImportVideosAsync(startupFiles);
+                }
             }
             catch (Exception e)
             {

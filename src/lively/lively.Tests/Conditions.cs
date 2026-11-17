@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using lively.Core.Library;
 
 namespace lively.Tests;
 
@@ -87,5 +88,38 @@ public sealed class MpvWaylandFactAttribute : FactAttribute
             }
         }
         return null;
+    }
+}
+
+/// <summary>
+/// Runs only when ffmpeg and ffprobe are on PATH. With CI=true it never skips.
+/// </summary>
+public sealed class FfmpegFactAttribute : FactAttribute
+{
+    public FfmpegFactAttribute()
+    {
+        Skip = Conditions.FfmpegSkipReason();
+    }
+}
+
+/// <summary>Needs ffmpeg and ffprobe on PATH and a D-Bus session bus. With CI=true it never skips.</summary>
+public sealed class FfmpegDBusFactAttribute : FactAttribute
+{
+    public FfmpegDBusFactAttribute()
+    {
+        Skip = Conditions.FfmpegSkipReason() ?? new DBusFactAttribute().Skip;
+    }
+}
+
+internal static class Conditions
+{
+    public static string? FfmpegSkipReason()
+    {
+        if (string.Equals(Environment.GetEnvironmentVariable("CI"), "true", StringComparison.OrdinalIgnoreCase)
+            || (VideoImporter.FindOnPath("ffmpeg") != null && VideoImporter.FindOnPath("ffprobe") != null))
+        {
+            return null;
+        }
+        return "Needs ffmpeg and ffprobe on PATH.";
     }
 }

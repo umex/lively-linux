@@ -3,6 +3,7 @@ using lively.Core;
 using lively.Core.DBus;
 using lively.Core.Desktop;
 using lively.Core.Display;
+using lively.Core.Library;
 using lively.Core.Settings;
 using lively.Core.Wallpapers;
 using lively.Ipc;
@@ -67,7 +68,7 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     private async Task<CoreDBusServer> StartServerAsync(IWallpaperService wallpaperService)
     {
         var server = new CoreDBusServer(wallpaperService, displays, new JsonSettingsService(tmp.Combine("config", "Settings.json")),
-            () => Interlocked.Increment(ref quitCalls));
+            new VideoImporter(tmp.Combine("library", "wallpapers")), () => Interlocked.Increment(ref quitCalls));
         disposables.Add(server);
         Assert.True(await server.StartAsync(await ConnectAsync(), busName));
         return server;
@@ -248,6 +249,45 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     }
 
     [DBusFact]
+    public async Task ImportVideo_MissingFile_IsImportFailed()
+    {
+        await StartAsync();
+
+        var e = await Assert.ThrowsAsync<DBusErrorReplyException>(() => client.ImportVideoAsync(tmp.Combine("missing.mp4")));
+
+        Assert.Equal(CoreErrors.ImportFailed, e.ErrorName);
+        Assert.Contains("does not exist", e.ErrorMessage);
+        Assert.False(Directory.Exists(tmp.Combine("library", "wallpapers")));
+    }
+
+    [DBusFact]
+    public async Task ImportVideo_RelativePath_IsImportFailed()
+    {
+        await StartAsync();
+
+        Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.ImportVideoAsync("videos/clip.mp4")));
+        Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.ImportVideoAsync("")));
+    }
+
+    [FfmpegDBusFact]
+    public async Task ImportVideo_EndToEnd_ReturnsAWallpaperThatCanBeSet()
+    {
+        await StartAsync();
+        var source = tmp.Combine("Tiny Clip.mp4");
+        await VideoImporterTests.CreateTinyVideoAsync(source);
+
+        var folder = await client.ImportVideoAsync(source);
+
+        Assert.Equal(tmp.Combine("library", "wallpapers", "tiny-clip"), folder);
+        Assert.NotNull(LibraryScanner.ScanFolder(folder)?.ThumbnailPath);
+        await client.SetWallpaperAsync(folder, "DP-1");
+        Assert.Equal([new RunningWallpaper("DP-1", folder)], await client.GetWallpapersAsync());
+
+        var notVideo = tmp.WriteFile("text", "notes.mp4");
+        Assert.Equal(CoreErrors.ImportFailed, await ErrorNameOf(() => client.ImportVideoAsync(notVideo)));
+    }
+
+    [DBusFact]
     public async Task DisplaysChanged_IsSignalled()
     {
         await StartAsync();
@@ -272,7 +312,8 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     public async Task SecondServer_DoesNotGetTheName()
     {
         await StartAsync();
-        var second = new CoreDBusServer(service, displays, new JsonSettingsService(tmp.Combine("other.json")), () => { });
+        var second = new CoreDBusServer(service, displays, new JsonSettingsService(tmp.Combine("other.json")),
+            new VideoImporter(tmp.Combine("other-wallpapers")), () => { });
         disposables.Add(second);
 
         Assert.False(await second.StartAsync(await ConnectAsync(), busName));

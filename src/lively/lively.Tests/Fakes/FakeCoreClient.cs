@@ -52,6 +52,15 @@ public sealed class FakeCoreClient : ICoreClient
 
     public Task<bool> GetPausedAsync() => Task.FromResult(Paused);
 
+    /// <summary>Returned by ImportVideoAsync.</summary>
+    public string ImportResultFolder { get; set; } = "";
+
+    public async Task<string> ImportVideoAsync(string path)
+    {
+        await Record("ImportVideo", path);
+        return ImportResultFolder;
+    }
+
     public Task QuitAsync() => Record("Quit");
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;

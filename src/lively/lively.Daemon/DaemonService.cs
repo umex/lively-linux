@@ -1,6 +1,7 @@
 using lively.Common;
 using lively.Core.DBus;
 using lively.Core.Display;
+using lively.Core.Library;
 using lively.Core.Settings;
 using lively.Core.Wallpapers;
 using Microsoft.Extensions.Hosting;
@@ -22,13 +23,14 @@ namespace lively.Daemon
         private readonly IWallpaperService wallpaperService;
         private readonly IDisplayManager displayManager;
         private readonly ISettingsService settingsService;
+        private readonly VideoImporter importer;
         private readonly CancellationTokenSource stopping = new();
         private DBusConnection? connection;
         private CoreDBusServer? server;
         private Task? restoreTask;
 
         public DaemonService(DaemonOptions options, DaemonExitCode exitCode, IHostApplicationLifetime lifetime,
-            IWallpaperService wallpaperService, IDisplayManager displayManager, ISettingsService settingsService)
+            IWallpaperService wallpaperService, IDisplayManager displayManager, ISettingsService settingsService, VideoImporter importer)
         {
             this.options = options;
             this.exitCode = exitCode;
@@ -36,6 +38,7 @@ namespace lively.Daemon
             this.wallpaperService = wallpaperService;
             this.displayManager = displayManager;
             this.settingsService = settingsService;
+            this.importer = importer;
         }
 
         public async Task StartAsync(CancellationToken cancellationToken)
@@ -58,7 +61,7 @@ namespace lively.Daemon
                 return;
             }
 
-            server = new CoreDBusServer(wallpaperService, displayManager, settingsService, Quit);
+            server = new CoreDBusServer(wallpaperService, displayManager, settingsService, importer, Quit);
             if (!await server.StartAsync(connection, Constants.DBus.DaemonBusName).ConfigureAwait(false))
             {
                 server = null;

@@ -4,7 +4,7 @@
   <!--
     Core of lively-linux, owned by lively-daemon as io.github.lively_linux.Daemon
     at /io/github/lively_linux/Core. Errors: io.github.lively_linux.Error.{WallpaperNotFound,
-    DisplayNotFound, PlayerFailed, InvalidSettings, Failed}. See docs/ipc.md.
+    DisplayNotFound, PlayerFailed, InvalidSettings, ImportFailed, Failed}. See docs/ipc.md.
   -->
   <interface name="io.github.lively_linux.Core1">
     <!-- (id, description, (x, y, width, height), scale, primary) -->
@@ -37,6 +37,11 @@
     </method>
     <method name="GetPaused">
       <arg name="paused" type="b" direction="out"/>
+    </method>
+    <!-- copies a video file (absolute path) into the library; returns the new wallpaper folder -->
+    <method name="ImportVideo">
+      <arg name="path" type="s" direction="in"/>
+      <arg name="folder" type="s" direction="out"/>
     </method>
     <method name="Quit"/>
     <!-- folder "" = closed -->

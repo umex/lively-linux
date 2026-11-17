@@ -51,6 +51,7 @@ handlers in `lively.Core` and `lively`). The constants live in `lively.Common/Co
 | `SetSettings` | `s` → | Replaces the settings with the given JSON object and saves them. A changed `WallpaperVolume` applies to the running wallpapers at once. |
 | `SetPaused` | `b` → | Pauses (`true`) or resumes (`false`) every wallpaper. Wallpapers started while paused start paused. Not persisted. |
 | `GetPaused` | → `b` | Whether the wallpapers are paused. |
+| `ImportVideo` | `s` (path) → `s` (folder) | Copies the video at the absolute `path` into a new folder under `library/wallpapers` (with a thumbnail and `LivelyInfo.json`) and returns that folder. Needs `ffmpeg` and `ffprobe` on the daemon's PATH. |
 | `Quit` | → | Closes the wallpapers (the layout is kept) and exits the daemon. |
 | signal `WallpaperChanged` | `ss` (display, folder) | A wallpaper started, or closed when `folder` is `""`. Sent for every change, also for those made by other clients, restores and crashed players. |
 | signal `DisplaysChanged` | | The display list changed; call `GetDisplays`. |
@@ -79,6 +80,7 @@ Rules:
 | `io.github.lively_linux.Error.DisplayNotFound` | No display with that id is connected (or `""` and no display at all). |
 | `io.github.lively_linux.Error.PlayerFailed` | The wallpaper file is missing, the player could not start, reported `Success:false`, exited early, or did not load within 15 s. |
 | `io.github.lively_linux.Error.InvalidSettings` | `SetSettings` got malformed JSON or not a JSON object. |
+| `io.github.lively_linux.Error.ImportFailed` | `ImportVideo` got a relative or missing path, the file has no video stream, or ffmpeg/ffprobe is missing or failed. Nothing is left in the library. |
 | `io.github.lively_linux.Error.Failed` | Anything else, for example a call that arrives while the daemon shuts down. |
 
 ### Settings JSON
@@ -106,7 +108,9 @@ first. The player load timeout (15 s) stays below the usual D-Bus client call ti
 - **UI:** owning `io.github.lively_linux.Lively` is the lock. A second `lively` calls
   `org.freedesktop.Application.Activate` on the first (forwarding `XDG_ACTIVATION_TOKEN` as
   `activation-token` and `DESKTOP_STARTUP_ID` as `desktop-startup-id` in `platform_data`) and exits
-  with code 0. The first instance shows and activates its window. Without a session bus the UI
+  with code 0. The first instance shows and activates its window. With file arguments
+  (`lively ~/Videos/rain.mp4`) the second instance calls `Open` with their `file://` URIs instead,
+  and the first instance imports them as video wallpapers. Without a session bus the UI
   starts anyway, without single-instance handling and without wallpapers.
 - The UI starts `lively-daemon` from its own directory when the daemon name has no owner and waits
   up to 10 s for the name. The daemon inherits the UI's process group and terminal, so Ctrl+C in
@@ -129,6 +133,8 @@ busctl --user call $D SetSettings s '{"Language":"de-DE"}'
 busctl --user call $D SetPaused b true
 busctl --user call $D GetPaused
 # b true
+busctl --user call $D ImportVideo s ~/Videos/rain.mp4
+# s "/home/user/.local/share/lively-wallpaper/library/wallpapers/rain"
 busctl --user call $D Quit
 busctl --user monitor io.github.lively_linux.Daemon          # watch calls and signals
 ```
