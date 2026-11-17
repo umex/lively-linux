@@ -4,7 +4,8 @@ using System.Runtime.InteropServices;
 namespace lively.Core.Display.Wayland
 {
     /// <summary>
-    /// Minimal libwayland-client binding: registry and wl_output only.
+    /// Minimal libwayland-client binding: registry, wl_output and the KDE primary-output listeners
+    /// (their interface tables are in <see cref="KdeProtocols"/>).
     /// Checked against wayland-client-core.h / libwayland-client 1.26; needs libwayland ≥ 1.20
     /// for the non-variadic <c>wl_proxy_marshal_array_flags</c>.
     /// </summary>
@@ -93,5 +94,20 @@ namespace lively.Core.Display.Wayland
         public delegate* unmanaged[Cdecl]<void*, nint, byte*, void> Name;
         /// <summary>Since version 4.</summary>
         public delegate* unmanaged[Cdecl]<void*, nint, byte*, void> Description;
+    }
+
+    /// <summary>struct kde_output_order_v1_listener.</summary>
+    internal unsafe struct KdeOutputOrderListener
+    {
+        /// <summary>One output name (wl_output.name); the outputs arrive in priority order, the first is the primary.</summary>
+        public delegate* unmanaged[Cdecl]<void*, nint, byte*, void> Output;
+        /// <summary>The list is complete; the next output event starts a new list.</summary>
+        public delegate* unmanaged[Cdecl]<void*, nint, void> Done;
+    }
+
+    /// <summary>struct kde_primary_output_v1_listener.</summary>
+    internal unsafe struct KdePrimaryOutputListener
+    {
+        public delegate* unmanaged[Cdecl]<void*, nint, byte*, void> PrimaryOutput;
     }
 }

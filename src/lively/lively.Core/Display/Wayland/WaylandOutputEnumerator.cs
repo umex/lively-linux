@@ -4,9 +4,20 @@ using lively.Models;
 
 namespace lively.Core.Display.Wayland
 {
+    /// <summary>What a short-lived Wayland connection saw.</summary>
+    /// <param name="Displays">The outputs, sorted left to right, exactly one marked primary.</param>
+    /// <param name="Globals">Every global interface name the compositor advertises (e.g. <c>zwlr_layer_shell_v1</c>).</param>
+    /// <param name="PrimaryOutputName">
+    /// The primary output's name as sent by <c>kde_output_order_v1</c> or <c>kde_primary_output_v1</c>; null when the
+    /// compositor advertises neither or sent no name. When it matches no display's Id, <see cref="Displays"/> uses
+    /// the (0,0) heuristic instead.
+    /// </param>
+    public sealed record WaylandSnapshot(IReadOnlyList<DisplayMonitor> Displays, IReadOnlySet<string> Globals, string? PrimaryOutputName);
+
     /// <summary>
     /// Lists the compositor's wl_output globals with a short-lived connection.
-    /// Works on any Wayland compositor; uses wl_output version 4 (name, description) when available.
+    /// Works on any Wayland compositor; uses wl_output version 4 (name, description) when available,
+    /// and the KDE output order protocols to find the primary output on Plasma.
     /// </summary>
     public static unsafe class WaylandOutputEnumerator
     {
@@ -35,7 +46,25 @@ namespace lively.Core.Display.Wayland
         private sealed class EnumerationState
         {
             public readonly List<OutputState> Outputs = [];
+            public readonly HashSet<string> Globals = new(StringComparer.Ordinal);
+            // Registry names and advertised versions of the KDE primary-output globals (0 = not advertised).
+            public uint OutputOrderGlobal;
+            public uint OutputOrderVersion;
+            public uint PrimaryOutputGlobal;
+            public uint PrimaryOutputVersion;
+            // kde_output_order_v1: the list being received, and the first name of the last complete list.
+            public readonly List<string> PendingOrder = [];
+            public bool OrderDone;
+            public string? PrimaryOutputName;
             public Exception? Error;
+        }
+
+        /// <summary>A bound KDE primary-output proxy and whether its bound version has a destroy request.</summary>
+        private struct KdeProxy
+        {
+            public nint Proxy;
+            public bool HasDestroy;
+            public uint DestroyOpcode;
         }
 
         // Allocated once and never freed: libwayland keeps the pointer for the proxy's lifetime.
@@ -59,11 +88,35 @@ namespace lively.Core.Display.Wayland
             return (nint)listener;
         });
 
+        private static readonly Lazy<nint> OutputOrderListener = new(() =>
+        {
+            var listener = (KdeOutputOrderListener*)NativeMemory.Alloc((nuint)sizeof(KdeOutputOrderListener));
+            listener->Output = &OnOrderOutput;
+            listener->Done = &OnOrderDone;
+            return (nint)listener;
+        });
+
+        private static readonly Lazy<nint> PrimaryOutputListener = new(() =>
+        {
+            var listener = (KdePrimaryOutputListener*)NativeMemory.Alloc((nuint)sizeof(KdePrimaryOutputListener));
+            listener->PrimaryOutput = &OnPrimaryOutput;
+            return (nint)listener;
+        });
+
         /// <summary>
         /// Connects to $WAYLAND_DISPLAY and returns the outputs, sorted left to right.
         /// </summary>
         /// <exception cref="WaylandUnavailableException">No compositor, missing library, or a protocol error.</exception>
-        public static IReadOnlyList<DisplayMonitor> Enumerate()
+        public static IReadOnlyList<DisplayMonitor> Enumerate() => Snapshot().Displays;
+
+        /// <summary>
+        /// Connects to $WAYLAND_DISPLAY and returns the outputs, the advertised globals and the primary output.
+        /// The primary comes from <c>kde_output_order_v1</c> (first output in priority order), else
+        /// <c>kde_primary_output_v1</c>; without either, or when the named output is not listed, the output at
+        /// (0,0), else the top-left one.
+        /// </summary>
+        /// <exception cref="WaylandUnavailableException">No compositor, missing library, or a protocol error.</exception>
+        public static WaylandSnapshot Snapshot()
         {
             nint display;
             try
@@ -82,6 +135,7 @@ namespace lively.Core.Display.Wayland
             var state = new EnumerationState();
             var stateHandle = GCHandle.Alloc(state);
             nint registry = 0;
+            KdeProxy kde = default;
             try
             {
                 var args = stackalloc WlArgument[1];
@@ -94,20 +148,31 @@ namespace lively.Core.Display.Wayland
                 }
                 WaylandNative.wl_proxy_add_listener(registry, (void*)RegistryListener.Value, (void*)GCHandle.ToIntPtr(stateHandle));
 
-                // First roundtrip: globals (outputs are bound in OnGlobal). Second: the outputs' events.
-                if (WaylandNative.wl_display_roundtrip(display) < 0 || WaylandNative.wl_display_roundtrip(display) < 0)
+                // First roundtrip: globals (outputs are bound in OnGlobal, the KDE protocol once all globals are
+                // known). Second: the outputs' events and the primary output's name.
+                if (WaylandNative.wl_display_roundtrip(display) < 0)
                 {
                     throw new WaylandUnavailableException("Wayland roundtrip failed.");
                 }
-                if (state.Error != null)
+                ThrowOnCallbackError(state);
+                kde = BindPrimaryOutputProtocol(registry, state, stateHandle);
+                if (WaylandNative.wl_display_roundtrip(display) < 0)
                 {
-                    throw new WaylandUnavailableException("Wayland callback failed: " + state.Error.Message, state.Error);
+                    throw new WaylandUnavailableException("Wayland roundtrip failed.");
                 }
+                ThrowOnCallbackError(state);
 
-                return ToDisplays(state.Outputs);
+                var primaryName = state.PrimaryOutputName;
+                if (!state.OrderDone && state.PendingOrder.Count > 0)
+                {
+                    // kde_output_order_v1 without the closing done: still the best information we have.
+                    primaryName = state.PendingOrder[0];
+                }
+                return new WaylandSnapshot(ToDisplays(state.Outputs, primaryName), state.Globals, primaryName);
             }
             finally
             {
+                ReleaseKdeProxy(kde);
                 foreach (var output in state.Outputs)
                 {
                     ReleaseOutput(output);
@@ -123,6 +188,82 @@ namespace lively.Core.Display.Wayland
                 }
                 WaylandNative.wl_display_disconnect(display);
                 stateHandle.Free();
+            }
+        }
+
+        private static void ThrowOnCallbackError(EnumerationState state)
+        {
+            if (state.Error != null)
+            {
+                throw new WaylandUnavailableException("Wayland callback failed: " + state.Error.Message, state.Error);
+            }
+        }
+
+        /// <summary>
+        /// Binds <c>kde_output_order_v1</c> when advertised, else <c>kde_primary_output_v1</c>; both send the primary
+        /// output's name right after the bind.
+        /// </summary>
+        private static KdeProxy BindPrimaryOutputProtocol(nint registry, EnumerationState state, GCHandle stateHandle)
+        {
+            nint iface;
+            uint global;
+            uint version;
+            nint listener;
+            bool hasDestroy;
+            uint destroyOpcode;
+            if (state.OutputOrderGlobal != 0)
+            {
+                iface = KdeProtocols.KdeOutputOrderV1;
+                global = state.OutputOrderGlobal;
+                version = Math.Min(state.OutputOrderVersion, KdeProtocols.OutputOrderVersion);
+                listener = OutputOrderListener.Value;
+                hasDestroy = true;
+                destroyOpcode = KdeProtocols.KDE_OUTPUT_ORDER_V1_DESTROY;
+            }
+            else if (state.PrimaryOutputGlobal != 0)
+            {
+                iface = KdeProtocols.KdePrimaryOutputV1;
+                global = state.PrimaryOutputGlobal;
+                version = Math.Min(state.PrimaryOutputVersion, KdeProtocols.PrimaryOutputVersion);
+                listener = PrimaryOutputListener.Value;
+                hasDestroy = version >= KdeProtocols.KDE_PRIMARY_OUTPUT_V1_DESTROY_SINCE_VERSION;
+                destroyOpcode = KdeProtocols.KDE_PRIMARY_OUTPUT_V1_DESTROY;
+            }
+            else
+            {
+                return default;
+            }
+
+            var args = stackalloc WlArgument[4];
+            args[0].u = global;
+            args[1].s = WaylandNative.InterfaceName(iface);
+            args[2].u = version;
+            args[3].n = 0;
+            var proxy = WaylandNative.wl_proxy_marshal_array_flags(registry, WaylandNative.WL_REGISTRY_BIND, iface, version, 0, args);
+            if (proxy == 0)
+            {
+                return default;
+            }
+            WaylandNative.wl_proxy_add_listener(proxy, (void*)listener, (void*)GCHandle.ToIntPtr(stateHandle));
+            return new KdeProxy { Proxy = proxy, HasDestroy = hasDestroy, DestroyOpcode = destroyOpcode };
+        }
+
+        private static void ReleaseKdeProxy(KdeProxy kde)
+        {
+            if (kde.Proxy == 0)
+            {
+                return;
+            }
+            if (kde.HasDestroy)
+            {
+                // The destroy requests have no arguments; the pointer is never read.
+                WlArgument none = default;
+                WaylandNative.wl_proxy_marshal_array_flags(kde.Proxy, kde.DestroyOpcode, 0,
+                    WaylandNative.wl_proxy_get_version(kde.Proxy), WaylandNative.WL_MARSHAL_FLAG_DESTROY, &none);
+            }
+            else
+            {
+                WaylandNative.wl_proxy_destroy(kde.Proxy);
             }
         }
 
@@ -146,7 +287,7 @@ namespace lively.Core.Display.Wayland
             output.Proxy = 0;
         }
 
-        private static List<DisplayMonitor> ToDisplays(List<OutputState> outputs)
+        private static List<DisplayMonitor> ToDisplays(List<OutputState> outputs, string? primaryName)
         {
             var result = outputs.Select(o =>
             {
@@ -169,8 +310,10 @@ namespace lively.Core.Display.Wayland
             .OrderBy(x => x.X).ThenBy(x => x.Y).ThenBy(x => x.Id, StringComparer.Ordinal)
             .ToList();
 
-            // Wayland has no primary output: take the one at the origin, else the top-left one.
-            var primary = result.FirstOrDefault(x => x.X == 0 && x.Y == 0)
+            // The compositor's choice when it names one (KDE); core Wayland has no primary output:
+            // take the one at the origin, else the top-left one.
+            var primary = (primaryName != null ? result.FirstOrDefault(x => x.Id == primaryName) : null)
+                ?? result.FirstOrDefault(x => x.X == 0 && x.Y == 0)
                 ?? result.OrderBy(x => x.Y).ThenBy(x => x.X).ThenBy(x => x.Id, StringComparer.Ordinal).FirstOrDefault();
             if (primary != null)
             {
@@ -192,9 +335,24 @@ namespace lively.Core.Display.Wayland
             try
             {
                 state = Target<EnumerationState>(data);
-                if (state == null || Utf8(iface) != "wl_output")
+                var interfaceName = Utf8(iface);
+                if (state == null || interfaceName == null)
                 {
                     return;
+                }
+                state.Globals.Add(interfaceName);
+                switch (interfaceName)
+                {
+                    case KdeProtocols.OutputOrderName:
+                        state.OutputOrderGlobal = name;
+                        state.OutputOrderVersion = version;
+                        return;
+                    case KdeProtocols.PrimaryOutputName:
+                        state.PrimaryOutputGlobal = name;
+                        state.PrimaryOutputVersion = version;
+                        return;
+                    case not "wl_output":
+                        return;
                 }
 
                 var outputInterface = WaylandNative.OutputInterface;
@@ -227,6 +385,88 @@ namespace lively.Core.Display.Wayland
         [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
         private static void OnGlobalRemove(void* data, nint registry, uint name)
         {
+        }
+
+        #endregion
+
+        #region KDE primary output callbacks
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static void OnOrderOutput(void* data, nint outputOrder, byte* outputName)
+        {
+            EnumerationState? state = null;
+            try
+            {
+                state = Target<EnumerationState>(data);
+                if (state == null)
+                {
+                    return;
+                }
+                if (state.OrderDone)
+                {
+                    // A new list after a complete one.
+                    state.OrderDone = false;
+                    state.PendingOrder.Clear();
+                }
+                var name = Utf8(outputName);
+                if (!string.IsNullOrEmpty(name))
+                {
+                    state.PendingOrder.Add(name);
+                }
+            }
+            catch (Exception e)
+            {
+                if (state != null)
+                {
+                    state.Error ??= e;
+                }
+            }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static void OnOrderDone(void* data, nint outputOrder)
+        {
+            EnumerationState? state = null;
+            try
+            {
+                state = Target<EnumerationState>(data);
+                if (state == null)
+                {
+                    return;
+                }
+                state.OrderDone = true;
+                state.PrimaryOutputName = state.PendingOrder.Count > 0 ? state.PendingOrder[0] : null;
+            }
+            catch (Exception e)
+            {
+                if (state != null)
+                {
+                    state.Error ??= e;
+                }
+            }
+        }
+
+        [UnmanagedCallersOnly(CallConvs = new[] { typeof(CallConvCdecl) })]
+        private static void OnPrimaryOutput(void* data, nint primaryOutput, byte* outputName)
+        {
+            EnumerationState? state = null;
+            try
+            {
+                state = Target<EnumerationState>(data);
+                if (state == null)
+                {
+                    return;
+                }
+                var name = Utf8(outputName);
+                state.PrimaryOutputName = string.IsNullOrEmpty(name) ? null : name;
+            }
+            catch (Exception e)
+            {
+                if (state != null)
+                {
+                    state.Error ??= e;
+                }
+            }
         }
 
         #endregion

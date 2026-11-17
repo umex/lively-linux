@@ -4,16 +4,22 @@ namespace lively.Core.Desktop
 {
     public sealed class WaylandDesktopBackend : IDesktopBackend
     {
-        public WaylandDesktopBackend(DesktopSession session)
+        private readonly bool hasLayerShell;
+
+        /// <param name="session">The detected session.</param>
+        /// <param name="hasLayerShell">Whether the compositor advertises <c>zwlr_layer_shell_v1</c>.</param>
+        public WaylandDesktopBackend(DesktopSession session, bool hasLayerShell)
         {
             Session = session;
+            this.hasLayerShell = hasLayerShell;
         }
 
         public string Name => "wayland";
 
         public DesktopSession Session { get; }
 
-        public bool CanPlaceWallpapers => false;
+        /// <summary>True when the compositor advertises <c>zwlr_layer_shell_v1</c> (KDE Plasma, wlroots compositors; not GNOME).</summary>
+        public bool CanPlaceWallpapers => hasLayerShell;
 
         public IReadOnlyList<string> GetPlayerArguments(DisplayMonitor display)
         {
