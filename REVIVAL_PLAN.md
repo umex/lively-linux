@@ -25,8 +25,8 @@ half-finished port. Reviving it means building the wallpaper engine, which was n
 | Compositor on this machine | KWin advertises `zwlr_layer_shell_v1` v5, `org_kde_plasma_window_management`, `ext_idle_notifier_v1`. |
 | Native libraries | QtWebEngine, LayerShellQt and libvlc are installed. mpv/libmpv, gtk4-layer-shell and WebKitGTK 6.0 are in the Fedora repositories. |
 
-Not checked: whether a layer-shell surface coexists with Plasma's own desktop (icons, widgets).
-That is spike A below.
+Not checked at the time: whether a layer-shell surface coexists with Plasma's own desktop (icons,
+widgets). That was spike A below; Phase 3 answered it (the surface covers them).
 
 ## Constraints to design around
 
@@ -39,7 +39,8 @@ That is spike A below.
    a desktop-type window. Each is a separate backend.
 3. **On KDE, plasmashell owns the desktop surface.** A separate background surface is likely to
    either cover desktop icons or sit hidden behind Plasma's wallpaper. The native route is a
-   Plasma wallpaper plugin (QML).
+   Plasma wallpaper plugin (QML). Phase 3 confirmed the first: a `background` layer surface covers
+   Plasma's desktop icons and widgets.
 4. **Avalonia fits the manager UI, not the wallpaper surface.** Avalonia 12.1 has a Wayland
    backend, but no layer-shell support was found. Wallpapers should render in separate player
    processes, which is also how upstream is structured.
@@ -49,8 +50,10 @@ That is spike A below.
 6. **Wayland hides global state.** Pause rules (fullscreen, focused app) and audio capture need
    compositor-specific protocols, PipeWire, MPRIS and UPower rather than one API.
 7. **Windows application wallpapers (`.exe`)** are out of scope.
-8. **This checkout sits on an NTFS/exFAT (fuseblk) mount.** Managed builds work, but Unix
-   permissions and symlinks do not. Native player builds are safer on a Linux filesystem.
+8. **This checkout sits on an NTFS/exFAT (fuseblk) mount.** Every file shows mode `777` (owner
+   root), so builds work and the apphosts (`lively`, `lively-daemon`, `lively-player-mpv`) run
+   from the build folder. Permissions cannot be changed and symlinks do not work, so anything
+   that depends on them (packaging) is safer on a Linux filesystem.
 
 ## Recommended direction
 
@@ -105,7 +108,7 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 - Desktop backends detect the session (Wayland/X11, KDE/GNOME/wlroots-like) but do not place
   wallpapers yet.
 
-### Phase 3 — MVP: video wallpapers on KDE Wayland
+### Phase 3 — MVP: video wallpapers on KDE Wayland (done)
 
 - Player process with mpv; set and close a wallpaper from the library; one wallpaper per monitor.
 - Replace the dummy player with the mpv player over the same protocol and launch arguments.
@@ -113,6 +116,48 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 - Start the daemon through a D-Bus activation file or a systemd user unit instead of from the UI.
 - Import a video file (generate `LivelyInfo.json` and a thumbnail with ffmpeg).
 - Restore wallpapers at login (XDG autostart); basic pause and resume.
+
+Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
+
+- Placement: `lively-player-mpv` shows the video on a `wlr-layer-shell` surface in the
+  `background` layer, one per output (namespace `lively-wallpaper`, anchored to all edges,
+  exclusive zone -1). On KDE this surface shares the stacking layer with plasmashell's desktop, so
+  desktop icons and widgets are covered while a wallpaper runs. The user accepted this. A Plasma
+  wallpaper plugin (QML) keeps the icons but ties playback to plasmashell and needs a separate
+  QML player; it was rejected for now and stays an option for an icon-friendly KDE backend. Also
+  rejected: a player written in C, and wrapping `mpvpaper`.
+- The player is pure .NET: P/Invoke to libmpv (render API), libwayland-client, libwayland-egl and
+  libEGL, with the `wl_interface` tables of the layer-shell protocol built by hand
+  (`WaylandInterfaceTable.cs`, shared with `lively.Core`). Wayland, EGL and mpv run on one thread
+  that sleeps in `poll()`; frames are paced by frame callbacks, with a 1 s timeout because KWin
+  sends none while the screen is locked. It uses the Phase 2 protocol and launch arguments
+  unchanged and exits 0 on close, stdin EOF, signals and `closed`, 1 on any failure (missing
+  library included). No C toolchain is needed; libmpv (`mpv-libs`, Debian `libmpv2`) must be
+  installed.
+- Player choice is `IDesktopBackend.PlayerFor`: on Wayland, videos and GIFs go to
+  `lively-player-mpv` (also when the compositor lacks layer-shell, so the player reports the
+  reason); X11, unknown sessions and fake displays keep `lively-player-dummy`.
+- Primary display: the enumerator binds `kde_output_order_v1` (first output = primary), else
+  `kde_primary_output_v1`, else takes the output at (0, 0). KWin 6.8 advertises only the output
+  order; the old (0, 0) rule picked the wrong output on the three-monitor test machine.
+- Import: `ImportVideo` copies the file into `library/wallpapers/<slug>`, reads it with `ffprobe`,
+  makes `thumbnail.jpg` with `ffmpeg` and writes `LivelyInfo.json` last; on failure the folder is
+  removed. The UI has an **Import video…** button, imports its file arguments, and a second
+  instance forwards them with `org.freedesktop.Application.Open`.
+- Start-up: `lively-daemon --install-user` writes a D-Bus activation file and an application
+  launcher that point at the build folder (re-run after building elsewhere); `--uninstall-user`
+  removes them. The UI calls `StartServiceByName` and falls back to spawning the daemon from its
+  own folder. The activated daemon runs as a transient systemd user unit (dbus-broker) with the
+  user manager's environment and logs to the journal. The daemon keeps
+  `~/.config/autostart/io.github.lively_linux.Daemon.desktop` in line with the `Startup`
+  setting; no systemd unit of our own.
+- Pause and volume: `SetPaused`/`GetPaused`/`PausedChanged` pause every wallpaper, not persisted.
+  New setting `WallpaperVolume`, default 0 (muted), applied to running wallpapers when changed.
+- Known limitations: desktop icons and widgets covered on KDE; only the integer `wl_output.scale`
+  (no `wp_fractional_scale_v1`), read once when the player starts; no wallpaper on X11 (dummy
+  player); GNOME has no layer-shell; other layer-shell compositors untested; no settings page yet
+  (`Startup` and `WallpaperVolume` are set over D-Bus); the core does not send `cmd_reload` or
+  mute yet. Not checked: whether a plasmashell restart stacks its desktop above the wallpaper.
 
 ### Phase 4 — Web wallpapers
 
@@ -131,7 +176,9 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 
 ### Phase 7 — More desktops
 
-- Generic layer-shell backend (Hyprland, Sway, COSMIC, niri), GNOME Shell extension, X11.
+- `lively-player-mpv` on other `wlr-layer-shell` compositors (Hyprland, Sway, COSMIC, niri):
+  test and fix; GNOME Shell extension; X11.
+- Option: a Plasma wallpaper plugin as an icon-friendly KDE backend (could also ship in Phase 8).
 
 ### Phase 8 — Packaging and release
 
