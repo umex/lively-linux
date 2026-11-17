@@ -29,5 +29,11 @@ namespace lively.Core
         public string? FakeDisplays { get; set; }
 
         public string PlayerLogDirectory { get; set; } = Constants.CommonPaths.LogDir;
+
+        /// <summary>Parent of the per-display QtWebEngine profiles of lively-player-web.</summary>
+        public string WebProfileDirectory { get; set; } = Constants.CommonPaths.WebEngineDir;
+
+        /// <summary>Where player executables are looked up. The daemon's own directory, where its build copies them.</summary>
+        public string PlayerDirectory { get; set; } = AppContext.BaseDirectory;
     }
 }

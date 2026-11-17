@@ -5,12 +5,18 @@ namespace lively.Core.Wallpapers
 {
     /// <summary>
     /// Picks the player for a wallpaper: the one the desktop backend names (<see cref="IDesktopBackend.PlayerFor"/>,
-    /// lively-player-mpv for videos and GIFs on Wayland), else lively-player-dummy.
+    /// lively-player-mpv for videos and GIFs and lively-player-web for web pages on Wayland), else lively-player-dummy.
     /// </summary>
     public sealed class WallpaperPlayerFactory : IWallpaperPlayerFactory
     {
         public const string DummyPlayerName = "lively-player-dummy";
         public const string MpvPlayerName = "lively-player-mpv";
+        public const string WebPlayerName = "lively-player-web";
+
+        /// <summary>The <see cref="WallpaperPlayerException"/> message when lively-player-web is not next to the daemon.</summary>
+        public const string WebPlayerMissingMessage =
+            "The web player (lively-player-web) is not built or installed. Building it needs cmake, a C++ compiler and the Qt 6 WebEngine "
+            + "and LayerShellQt development packages (Fedora: gcc-c++ cmake qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtwebengine-devel layer-shell-qt-devel).";
 
         private readonly CoreOptions options;
         private readonly IDesktopBackend backend;
@@ -42,28 +48,39 @@ namespace lively.Core.Wallpapers
             args.AddRange(backend.GetPlayerArguments(display));
 
             var player = backend.PlayerFor(model.LivelyInfo.Type) ?? DummyPlayerName;
-            if (player == MpvPlayerName)
+            var displayName = SafeFileName(display.Id);
+            if (LogName(player) is { } logName)
             {
-                args.Add("--mpv-log");
-                args.Add(Path.Combine(options.PlayerLogDirectory, "player-mpv-" + SafeFileName(display.Id) + ".log"));
+                args.Add($"--{logName}-log");
+                args.Add(Path.Combine(options.PlayerLogDirectory, $"player-{logName}-{displayName}.log"));
             }
-            else if (player == DummyPlayerName)
+            if (player == WebPlayerName)
             {
-                args.Add("--dummy-log");
-                args.Add(Path.Combine(options.PlayerLogDirectory, "player-dummy-" + SafeFileName(display.Id) + ".log"));
+                // One profile per display: concurrent Chromium instances must not share a storage path.
+                args.Add("--web-profile");
+                args.Add(Path.Combine(options.WebProfileDirectory, displayName));
             }
 
             PlayerLaunchInfo launch;
             try
             {
-                launch = PlayerExecutableResolver.Resolve(player, args);
+                launch = PlayerExecutableResolver.Resolve(options.PlayerDirectory, player, args);
             }
             catch (FileNotFoundException e)
             {
-                throw new WallpaperPlayerException(e.Message, e);
+                throw new WallpaperPlayerException(player == WebPlayerName ? WebPlayerMissingMessage : e.Message, e);
             }
             return new ProcessWallpaperPlayer(launch, model, display, options.PlayerLoadTimeout, options.PlayerCloseTimeout, volume);
         }
+
+        /// <summary>The name in the player's <c>--&lt;name&gt;-log</c> argument and log file, null for an unknown player.</summary>
+        private static string? LogName(string player) => player switch
+        {
+            DummyPlayerName => "dummy",
+            MpvPlayerName => "mpv",
+            WebPlayerName => "web",
+            _ => null,
+        };
 
         private static string SafeFileName(string name)
         {

@@ -99,7 +99,11 @@ public class DesktopSessionDetectorTests
     [InlineData(WallpaperType.video, true, "lively-player-mpv")]
     [InlineData(WallpaperType.gif, true, "lively-player-mpv")]
     [InlineData(WallpaperType.video, false, "lively-player-mpv")]
-    [InlineData(WallpaperType.web, true, null)]
+    [InlineData(WallpaperType.web, true, "lively-player-web")]
+    [InlineData(WallpaperType.webaudio, true, "lively-player-web")]
+    [InlineData(WallpaperType.url, true, "lively-player-web")]
+    [InlineData(WallpaperType.web, false, "lively-player-web")]
+    [InlineData(WallpaperType.videostream, true, null)]
     [InlineData(WallpaperType.app, true, null)]
     [InlineData(WallpaperType.picture, true, null)]
     public void WaylandBackend_PlayerFor(WallpaperType type, bool hasLayerShell, string? expected)
@@ -113,6 +117,7 @@ public class DesktopSessionDetectorTests
     [InlineData(WallpaperType.video)]
     [InlineData(WallpaperType.gif)]
     [InlineData(WallpaperType.web)]
+    [InlineData(WallpaperType.url)]
     public void NullBackend_PlayerFor_IsTheDummy(WallpaperType type)
     {
         var backend = new NullDesktopBackend(new DesktopSession(SessionType.X11, DesktopEnvironment.Kde, "KDE"));

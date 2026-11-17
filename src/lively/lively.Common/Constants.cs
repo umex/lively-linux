@@ -36,6 +36,8 @@ namespace lively.Common
             public static string TempDir { get; } = Path.Combine(CacheDir, "temp");
             public static string TempCefDir { get; } = Path.Combine(CacheDir, "Cef");
             public static string TempWebView2Dir { get; } = Path.Combine(CacheDir, "WebView2");
+            /// <summary>QtWebEngine profiles of lively-player-web. ~/.cache/lively-wallpaper/WebEngine</summary>
+            public static string WebEngineDir { get; } = Path.Combine(CacheDir, "WebEngine");
             public static string AppRulesPath { get; } = Path.Combine(ConfigDir, "AppRules.json");
             public static string WallpaperLayoutPath { get; } = Path.Combine(ConfigDir, "WallpaperLayout.json");
             public static string UserSettingsPath { get; } = Path.Combine(ConfigDir, "Settings.json");
