@@ -20,10 +20,11 @@
 ## Progress
 
 The project is in its early stages. <br>
-Video wallpapers play on **KDE Plasma (Wayland)** <br>
-through `lively-player-mpv`. Importing videos, <br>
-pause / resume and restoring the wallpapers <br>
-at login work. Web wallpapers do not exist yet.
+Video and web wallpapers play on **KDE Plasma (Wayland)** <br>
+through `lively-player-mpv` and `lively-player-web`. <br>
+Importing videos, HTML pages and website addresses, <br>
+pause / resume and restoring the wallpapers at login work. <br>
+Customizing Lively web wallpapers and audio data do not exist yet.
 
 See the **[Revival Plan]** for the roadmap.
 
@@ -39,7 +40,7 @@ See the **[Revival Plan]** for the roadmap.
 
 - Interface : **[AvaloniaUI]**
 
-- Web Browser : ***???***
+- Web Browser : **[QtWebEngine]** (Chromium), in a C++ / Qt 6 player
 
 - Desktop : **KDE Plasma (Wayland)** first, <br>
   other `wlr-layer-shell` compositors next
@@ -62,8 +63,10 @@ Lively Linux is split into processes that talk over the D-Bus session bus:
 
 - **Players** — one process per display, driven by the daemon with JSON lines on stdin/stdout
   (the message names of upstream Lively). `lively-player-mpv` plays videos and GIFs with libmpv
-  on a `wlr-layer-shell` background surface. Everything else, and every wallpaper on X11, goes to
-  `lively-player-dummy`, which renders nothing.
+  on a `wlr-layer-shell` background surface. `lively-player-web` shows local HTML wallpapers and
+  websites with QtWebEngine on the same kind of surface; the mouse reaches the page, the keyboard
+  does not. Everything else, and every wallpaper on X11, goes to `lively-player-dummy`, which
+  renders nothing.
 
 Interfaces, error names, `busctl` examples, start-up and the player protocol are described in **[docs/ipc.md]**.
 
@@ -77,12 +80,13 @@ Interfaces, error names, `busctl` examples, start-up and the player protocol are
 | Wallpapers | `~/.local/share/lively-wallpaper/library/wallpapers` |
 | Settings | `~/.config/lively-wallpaper/Settings.json` |
 | Wallpaper layout (which wallpaper on which display) | `~/.config/lively-wallpaper/WallpaperLayout.json` |
-| Logs (`ui.log`, `daemon.log`, `player-mpv-<display>.log`, `player-dummy-<display>.log`) | `~/.local/state/lively-wallpaper/logs` |
+| Logs (`ui.log`, `daemon.log`, `player-mpv-<display>.log`, `player-web-<display>.log`, `player-dummy-<display>.log`) | `~/.local/state/lively-wallpaper/logs` |
+| Browser profiles of web wallpapers (cache, cookies, local storage), one per display | `~/.cache/lively-wallpaper/WebEngine/<display>` |
 | D-Bus activation file (`--install-user`) | `~/.local/share/dbus-1/services/io.github.lively_linux.Daemon.service` |
 | Application launcher (`--install-user`) | `~/.local/share/applications/io.github.lively_linux.Lively.desktop` |
 | Login autostart (`Startup` setting) | `~/.config/autostart/io.github.lively_linux.Daemon.desktop` |
 
-*`$XDG_DATA_HOME`, `$XDG_CONFIG_HOME` and `$XDG_STATE_HOME` are used instead when set.*
+*`$XDG_DATA_HOME`, `$XDG_CONFIG_HOME`, `$XDG_STATE_HOME` and `$XDG_CACHE_HOME` are used instead when set.*
 
 <br>
 <br>
@@ -98,6 +102,20 @@ Interfaces, error names, `busctl` examples, start-up and the player protocol are
 
     libmpv (**[mpv-libs]** / **[libmpv2]**) plays the videos, <br>
     `ffmpeg` and `ffprobe` are needed to import them.
+
+    For web wallpapers, also install CMake, a C++ compiler and the <br>
+    Qt 6 WebEngine and LayerShellQt development packages:
+
+    ```shell
+    sudo dnf install gcc-c++ cmake qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtwebengine-devel layer-shell-qt-devel
+    ```
+
+    `dotnet build` then builds `lively-player-web` with CMake. <br>
+    At run time it needs `qt6-qtwebengine` and `layer-shell-qt`. <br>
+    Without these packages the build prints warning `LIVELYWEB01` and goes on; <br>
+    web wallpapers then fail with a message naming the packages. <br>
+    `dotnet build -p:BuildWebPlayer=false` skips the player. <br>
+    *Ubuntu 24.04 ships LayerShellQt for Qt 5 only, so the web player cannot be built there.*
 
 2. Navigate to `src/lively`
 
@@ -128,8 +146,12 @@ Interfaces, error names, `busctl` examples, start-up and the player protocol are
     dotnet run --project lively
     ```
 
-    Import a video with **Import video…**, or pass it on the command line: <br>
-    `./lively/bin/Debug/net10.0/lively ~/Videos/rain.mp4`. <br>
+    **Import…** imports videos and HTML files (`.html`, `.htm`), <br>
+    **Import folder…** a web page folder (with `index.html`), <br>
+    **Add URL…** a website (`http://` or `https://`). <br>
+    The same works on the command line: <br>
+    `./lively/bin/Debug/net10.0/lively ~/Videos/rain.mp4 ~/pages/aurora.html https://example.com`. <br>
+    Web wallpapers get a thumbnail from the page a few seconds after they first run. <br>
     Right-click a wallpaper and choose **Set Wallpaper**; **Pause** pauses every wallpaper <br>
     (not remembered across daemon restarts). <br>
     Wallpapers start muted (`WallpaperVolume` 0).
@@ -157,7 +179,10 @@ Interfaces, error names, `busctl` examples, start-up and the player protocol are
 
     `dbus-run-session` gives the D-Bus tests a private session bus; <br>
     without a bus they are skipped. The player and import tests <br>
-    need a Wayland session, libmpv and ffmpeg, and are skipped otherwise.
+    need a Wayland session, libmpv and ffmpeg, and are skipped otherwise. <br>
+    The web player tests need a Wayland session and the built `lively-player-web`; <br>
+    they briefly show a test page on the first display. While the session is locked <br>
+    most of them are skipped (`LIVELY_TEST_WEB_WHEN_LOCKED=1` runs them anyway).
 
 <br>
 
@@ -170,6 +195,7 @@ Interfaces, error names, `busctl` examples, start-up and the player protocol are
 [Revival Plan]: REVIVAL_PLAN.md
 [docs/ipc.md]: docs/ipc.md
 [MPV]: https://github.com/mpv-player/mpv
+[QtWebEngine]: https://doc.qt.io/qt-6/qtwebengine-index.html
 [mpv-libs]: https://packages.fedoraproject.org/pkgs/mpv/mpv-libs/
 [libmpv2]: https://packages.debian.org/libmpv2
 
