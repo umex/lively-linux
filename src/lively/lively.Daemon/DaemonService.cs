@@ -4,6 +4,7 @@ using lively.Core.Display;
 using lively.Core.Library;
 using lively.Core.Settings;
 using lively.Core.Wallpapers;
+using lively.Models;
 using Microsoft.Extensions.Hosting;
 using Tmds.DBus.Protocol;
 
@@ -12,6 +13,7 @@ namespace lively.Daemon
     /// <summary>
     /// Connects to the session bus, publishes the core as <see cref="Constants.DBus.DaemonBusName"/>,
     /// starts display watching and restores the saved wallpapers. Stopping closes every player.
+    /// Keeps the login autostart entry in line with <see cref="SettingsModel.Startup"/>.
     /// </summary>
     public sealed class DaemonService : IHostedService
     {
@@ -28,6 +30,9 @@ namespace lively.Daemon
         private DBusConnection? connection;
         private CoreDBusServer? server;
         private Task? restoreTask;
+        // Settings change on D-Bus handler threads; one writer at a time.
+        private readonly object autostartLock = new();
+        private UserInstaller? installer;
 
         public DaemonService(DaemonOptions options, DaemonExitCode exitCode, IHostApplicationLifetime lifetime,
             IWallpaperService wallpaperService, IDisplayManager displayManager, ISettingsService settingsService, VideoImporter importer)
@@ -69,6 +74,9 @@ namespace lively.Daemon
                 return;
             }
 
+            settingsService.SettingsChanged += OnSettingsChanged;
+            ApplyAutostart(settingsService.Settings.Startup);
+
             displayManager.Start();
             Logger.Info("Displays: " + string.Join("; ", displayManager.Displays));
             if (options.NoRestore)
@@ -93,6 +101,7 @@ namespace lively.Daemon
             }
 
             Logger.Info("Stopping.");
+            settingsService.SettingsChanged -= OnSettingsChanged;
             if (restoreTask != null)
             {
                 await restoreTask.ConfigureAwait(false);
@@ -122,6 +131,26 @@ namespace lively.Daemon
             catch (Exception e)
             {
                 Logger.Error("Restoring the wallpapers failed: " + e);
+            }
+        }
+
+        private void OnSettingsChanged(object? sender, SettingsModel settings) => ApplyAutostart(settings.Startup);
+
+        /// <summary>Writes or removes the autostart entry; a failure is logged, never fatal.</summary>
+        private void ApplyAutostart(bool enabled)
+        {
+            lock (autostartLock)
+            {
+                try
+                {
+                    installer ??= new UserInstaller(Constants.CommonPaths.XdgDataHome, Constants.CommonPaths.XdgConfigHome,
+                        Path.Combine(AppContext.BaseDirectory, "data"), PlayerExecutableResolver.Resolve("lively-daemon", []), ui: null);
+                    installer.SetAutostart(enabled);
+                }
+                catch (Exception e)
+                {
+                    Logger.Error($"Cannot {(enabled ? "write" : "remove")} the autostart entry: {e.Message}");
+                }
             }
         }
 

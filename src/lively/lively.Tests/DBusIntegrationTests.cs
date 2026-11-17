@@ -352,4 +352,13 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
         Assert.True(player.IsExited);
         Assert.Contains("--wallpaper-display HDMI-A-1", File.ReadAllText(Path.Combine(options.PlayerLogDirectory, "player-dummy-HDMI-A-1.log")));
     }
+
+    [DBusFact]
+    public async Task StartServiceByName_UnknownName_IsServiceUnknown()
+    {
+        var connection = await ConnectAsync();
+
+        Assert.Equal(DBusActivation.ServiceUnknown,
+            await ErrorNameOf(() => DBusActivation.StartServiceByNameAsync(connection, busName)));
+    }
 }

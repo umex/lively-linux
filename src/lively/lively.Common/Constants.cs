@@ -11,15 +11,18 @@ namespace lively.Common
         {
             private const string AppDirName = "lively-wallpaper";
 
-            // XDG base directories. .NET maps LocalApplicationData to $XDG_DATA_HOME (~/.local/share)
-            // and ApplicationData to $XDG_CONFIG_HOME (~/.config); state and cache have no SpecialFolder.
-            // DoNotVerify: without it GetFolderPath returns "" for a directory that does not exist yet,
-            // which turned these paths into relative ones.
+            // XDG base directories ($XDG_*_HOME when set to an absolute path, else the spec's default under
+            // the home directory). Declared first: static initializers run in textual order.
+
+            /// <summary>$XDG_DATA_HOME or ~/.local/share</summary>
+            public static string XdgDataHome { get; } = GetXdgDir("XDG_DATA_HOME", ".local", "share");
+            /// <summary>$XDG_CONFIG_HOME or ~/.config</summary>
+            public static string XdgConfigHome { get; } = GetXdgDir("XDG_CONFIG_HOME", ".config");
 
             /// <summary>User data: wallpaper library. ~/.local/share/lively-wallpaper</summary>
-            public static string AppDataDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData, Environment.SpecialFolderOption.DoNotVerify), AppDirName);
+            public static string AppDataDir { get; } = Path.Combine(XdgDataHome, AppDirName);
             /// <summary>Settings files. ~/.config/lively-wallpaper</summary>
-            public static string ConfigDir { get; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData, Environment.SpecialFolderOption.DoNotVerify), AppDirName);
+            public static string ConfigDir { get; } = Path.Combine(XdgConfigHome, AppDirName);
             /// <summary>Logs and other state. ~/.local/state/lively-wallpaper</summary>
             public static string StateDir { get; } = Path.Combine(GetXdgDir("XDG_STATE_HOME", ".local", "state"), AppDirName);
             /// <summary>Disposable files. ~/.cache/lively-wallpaper</summary>

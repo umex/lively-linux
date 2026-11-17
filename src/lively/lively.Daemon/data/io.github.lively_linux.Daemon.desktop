@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Lively Wallpaper daemon
+Exec=@EXEC@
+NoDisplay=true
+Terminal=false
+X-GNOME-Autostart-enabled=true
