@@ -22,4 +22,9 @@
     <ProjectReference Include="..\lively.Player.Mpv\lively.Player.Mpv.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Templates and icon for the install-user option (UserInstaller); also copied into referencing projects. -->
+    <None Include="data\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

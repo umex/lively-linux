@@ -12,6 +12,8 @@ public class DaemonOptionsTests
         Assert.False(options.NoRestore);
         Assert.Null(options.Displays);
         Assert.False(options.ShowHelp);
+        Assert.False(options.InstallUser);
+        Assert.False(options.UninstallUser);
     }
 
     [Fact]
@@ -39,5 +41,37 @@ public class DaemonOptionsTests
     public void Parse_RejectsInvalidArguments(params string[] args)
     {
         Assert.Throws<ArgumentException>(() => DaemonOptions.Parse(args));
+    }
+
+    [Fact]
+    public void Parse_InstallUser()
+    {
+        var options = DaemonOptions.Parse(["--install-user"]);
+
+        Assert.True(options.InstallUser);
+        Assert.False(options.UninstallUser);
+    }
+
+    [Fact]
+    public void Parse_UninstallUser()
+    {
+        var options = DaemonOptions.Parse(["--uninstall-user"]);
+
+        Assert.True(options.UninstallUser);
+        Assert.False(options.InstallUser);
+    }
+
+    [Fact]
+    public void Parse_InstallAndUninstall_AreExclusive()
+    {
+        var e = Assert.Throws<ArgumentException>(() => DaemonOptions.Parse(["--install-user", "--uninstall-user"]));
+        Assert.Contains("--install-user", e.Message);
+    }
+
+    [Fact]
+    public void Usage_MentionsTheInstallOptions()
+    {
+        Assert.Contains("--install-user", DaemonOptions.Usage);
+        Assert.Contains("--uninstall-user", DaemonOptions.Usage);
     }
 }

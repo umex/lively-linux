@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Lively Wallpaper
+Comment=Animated wallpapers
+Exec=@UI_EXEC@ %U
+Icon=@ICON@
+Terminal=false
+Categories=Settings;DesktopSettings;
+MimeType=video/mp4;video/webm;video/x-matroska;video/quicktime;video/x-msvideo;
+StartupNotify=true

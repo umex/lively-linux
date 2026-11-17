@@ -112,9 +112,16 @@ first. The player load timeout (15 s) stays below the usual D-Bus client call ti
   (`lively ~/Videos/rain.mp4`) the second instance calls `Open` with their `file://` URIs instead,
   and the first instance imports them as video wallpapers. Without a session bus the UI
   starts anyway, without single-instance handling and without wallpapers.
-- The UI starts `lively-daemon` from its own directory when the daemon name has no owner and waits
-  up to 10 s for the name. The daemon inherits the UI's process group and terminal, so Ctrl+C in
-  that terminal stops both. D-Bus activation or a systemd user unit is planned for Phase 3.
+- When the daemon name has no owner, the UI asks the bus to start it (`StartServiceByName`) and
+  waits up to 10 s for the name. `lively-daemon --install-user` writes the activation file
+  `~/.local/share/dbus-1/services/io.github.lively_linux.Daemon.service` (plus the application
+  launcher); an activated daemon runs as a transient systemd user unit and logs to the journal.
+  `--uninstall-user` removes the files again.
+- Without an activation file (`ServiceUnknown`), or when activation fails, the UI starts
+  `lively-daemon` from its own directory. That daemon inherits the UI's process group and
+  terminal, so Ctrl+C in that terminal stops both.
+- The daemon writes `~/.config/autostart/io.github.lively_linux.Daemon.desktop` when the `Startup`
+  setting is true and removes it when false.
 
 ## Examples with busctl
 
