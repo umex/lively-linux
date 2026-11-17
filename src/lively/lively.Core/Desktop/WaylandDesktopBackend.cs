@@ -1,3 +1,5 @@
+using lively.Common;
+using lively.Core.Wallpapers;
 using lively.Models;
 
 namespace lively.Core.Desktop
@@ -30,6 +32,16 @@ namespace lively.Core.Desktop
                 "--wallpaper-desktop", DesktopName(Session.Environment),
             ];
         }
+
+        /// <summary>
+        /// Videos and GIFs play in <c>lively-player-mpv</c>, also without layer-shell: the player then fails with the
+        /// precise reason (no layer-shell, unknown output, missing libmpv). Everything else stays on the dummy.
+        /// </summary>
+        public string? PlayerFor(WallpaperType type) => type switch
+        {
+            WallpaperType.video or WallpaperType.gif => WallpaperPlayerFactory.MpvPlayerName,
+            _ => null,
+        };
 
         private static string DesktopName(DesktopEnvironment environment) => environment switch
         {

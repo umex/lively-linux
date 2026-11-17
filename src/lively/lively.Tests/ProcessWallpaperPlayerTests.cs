@@ -219,9 +219,9 @@ public class ProcessWallpaperPlayerTests
     {
         using var tmp = new TempDirectory();
         var options = new CoreOptions { PlayerLogDirectory = tmp.Combine("logs") };
-        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"), hasLayerShell: true);
-        var factory = new WallpaperPlayerFactory(options, backend);
-        var model = DummyPlayer.Model(tmp);
+        var factory = new WallpaperPlayerFactory(options, WaylandBackend());
+        // Web wallpapers have no real player yet, also on Wayland.
+        var model = Core.Library.LibraryScanner.ScanFolder(WallpaperFixture.Create(tmp, "page", "Page", WallpaperType.web))!;
 
         using var player = factory.Create(model, DummyPlayer.Display("DP-2"), new PlaybackState(0, false));
         var console = new ConsoleRecorder(player);
@@ -230,14 +230,51 @@ public class ProcessWallpaperPlayerTests
 
         var started = console.Messages[0];
         Assert.Contains("--wallpaper-url " + model.FilePath, started);
-        Assert.Contains("--wallpaper-type video", started);
+        Assert.Contains("--wallpaper-type web", started);
         Assert.Contains("--wallpaper-display DP-2", started);
         Assert.Contains("--wallpaper-geometry 1920x1080", started);
         Assert.Contains("--wallpaper-volume 0", started);
         Assert.Contains("--wallpaper-output DP-2", started);
         var log = File.ReadAllText(Path.Combine(options.PlayerLogDirectory, "player-dummy-DP-2.log"));
-        Assert.Contains("loaded " + model.FilePath + " (video) on DP-2 1920x1080", log);
+        Assert.Contains("loaded " + model.FilePath + " (web) on DP-2 1920x1080", log);
         Assert.Contains("exiting: cmd_close", log);
+    }
+
+    [Theory]
+    [InlineData(WallpaperType.video)]
+    [InlineData(WallpaperType.gif)]
+    public void Factory_VideoOnWayland_UsesMpvPlayer(WallpaperType type)
+    {
+        using var tmp = new TempDirectory();
+        var options = new CoreOptions { PlayerLogDirectory = tmp.Combine("logs") };
+        var factory = new WallpaperPlayerFactory(options, WaylandBackend());
+        var model = Core.Library.LibraryScanner.ScanFolder(WallpaperFixture.Create(tmp, "clip", "Clip", type))!;
+
+        using var player = Assert.IsType<ProcessWallpaperPlayer>(factory.Create(model, DummyPlayer.Display("DP-2"), new PlaybackState(25, false)));
+
+        var launch = player.Launch;
+        var executable = launch.FileName.EndsWith(WallpaperPlayerFactory.MpvPlayerName, StringComparison.Ordinal) ? launch.FileName : launch.Arguments[0];
+        Assert.Matches("lively-player-mpv(\\.dll)?$", executable);
+        Assert.Contains("--mpv-log", launch.Arguments);
+        Assert.DoesNotContain("--dummy-log", launch.Arguments);
+        Assert.Equal(Path.Combine(options.PlayerLogDirectory, "player-mpv-DP-2.log"), launch.Arguments[launch.Arguments.ToList().IndexOf("--mpv-log") + 1]);
+        Assert.Equal("25", launch.Arguments[launch.Arguments.ToList().IndexOf("--wallpaper-volume") + 1]);
+        Assert.Equal("DP-2", launch.Arguments[launch.Arguments.ToList().IndexOf("--wallpaper-output") + 1]);
+    }
+
+    [Fact]
+    public void Factory_VideoWithoutDesktopBackend_UsesDummy()
+    {
+        using var tmp = new TempDirectory();
+        var factory = new WallpaperPlayerFactory(new CoreOptions { PlayerLogDirectory = tmp.Combine("logs") },
+            new NullDesktopBackend(new DesktopSession(SessionType.X11, DesktopEnvironment.Kde, "KDE")));
+
+        using var player = Assert.IsType<ProcessWallpaperPlayer>(factory.Create(DummyPlayer.Model(tmp), DummyPlayer.Display(), new PlaybackState(0, false)));
+
+        Assert.Contains(WallpaperPlayerFactory.DummyPlayerName, string.Join(' ', [player.Launch.FileName, .. player.Launch.Arguments]));
+        Assert.DoesNotContain(WallpaperPlayerFactory.MpvPlayerName, string.Join(' ', [player.Launch.FileName, .. player.Launch.Arguments]));
+        Assert.Contains("--dummy-log", player.Launch.Arguments);
+        Assert.DoesNotContain("--mpv-log", player.Launch.Arguments);
     }
 
     [Fact]
@@ -251,6 +288,9 @@ public class ProcessWallpaperPlayerTests
 
         Assert.Throws<WallpaperPlayerException>(() => factory.Create(model, DummyPlayer.Display(), new PlaybackState(0, false)));
     }
+
+    private static WaylandDesktopBackend WaylandBackend() =>
+        new(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"), hasLayerShell: true);
 
     private static bool IsRunning(int pid)
     {

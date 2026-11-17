@@ -1,3 +1,4 @@
+using lively.Common;
 using lively.Models;
 
 namespace lively.Core.Desktop
@@ -20,5 +21,11 @@ namespace lively.Core.Desktop
 
         /// <summary>Extra --wallpaper-* arguments that tell the player how to place itself on <paramref name="display"/>.</summary>
         IReadOnlyList<string> GetPlayerArguments(DisplayMonitor display);
+
+        /// <summary>
+        /// Assembly name of the player process for wallpapers of <paramref name="type"/> (for example
+        /// <c>lively-player-mpv</c>), or null for <c>lively-player-dummy</c>.
+        /// </summary>
+        string? PlayerFor(WallpaperType type);
     }
 }

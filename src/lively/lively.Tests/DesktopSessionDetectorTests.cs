@@ -1,3 +1,4 @@
+using lively.Common;
 using lively.Core.Desktop;
 using lively.Models;
 
@@ -92,5 +93,30 @@ public class DesktopSessionDetectorTests
 
         Assert.Empty(backend.GetPlayerArguments(new DisplayMonitor { Id = "DP-1" }));
         Assert.False(backend.CanPlaceWallpapers);
+    }
+
+    [Theory]
+    [InlineData(WallpaperType.video, true, "lively-player-mpv")]
+    [InlineData(WallpaperType.gif, true, "lively-player-mpv")]
+    [InlineData(WallpaperType.video, false, "lively-player-mpv")]
+    [InlineData(WallpaperType.web, true, null)]
+    [InlineData(WallpaperType.app, true, null)]
+    [InlineData(WallpaperType.picture, true, null)]
+    public void WaylandBackend_PlayerFor(WallpaperType type, bool hasLayerShell, string? expected)
+    {
+        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"), hasLayerShell);
+
+        Assert.Equal(expected, backend.PlayerFor(type));
+    }
+
+    [Theory]
+    [InlineData(WallpaperType.video)]
+    [InlineData(WallpaperType.gif)]
+    [InlineData(WallpaperType.web)]
+    public void NullBackend_PlayerFor_IsTheDummy(WallpaperType type)
+    {
+        var backend = new NullDesktopBackend(new DesktopSession(SessionType.X11, DesktopEnvironment.Kde, "KDE"));
+
+        Assert.Null(backend.PlayerFor(type));
     }
 }
