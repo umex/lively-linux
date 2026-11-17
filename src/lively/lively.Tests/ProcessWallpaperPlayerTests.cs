@@ -4,6 +4,8 @@ using lively.Core;
 using lively.Core.Desktop;
 using lively.Core.Wallpapers;
 using lively.Models.Message;
+// lively.Common has an unused upstream enum of the same name.
+using PlaybackState = lively.Core.Wallpapers.PlaybackState;
 
 namespace lively.Tests;
 
@@ -221,7 +223,7 @@ public class ProcessWallpaperPlayerTests
         var factory = new WallpaperPlayerFactory(options, backend);
         var model = DummyPlayer.Model(tmp);
 
-        using var player = factory.Create(model, DummyPlayer.Display("DP-2"));
+        using var player = factory.Create(model, DummyPlayer.Display("DP-2"), new PlaybackState(0, false));
         var console = new ConsoleRecorder(player);
         await player.ShowAsync();
         await player.CloseAsync();
@@ -231,6 +233,7 @@ public class ProcessWallpaperPlayerTests
         Assert.Contains("--wallpaper-type video", started);
         Assert.Contains("--wallpaper-display DP-2", started);
         Assert.Contains("--wallpaper-geometry 1920x1080", started);
+        Assert.Contains("--wallpaper-volume 0", started);
         Assert.Contains("--wallpaper-output DP-2", started);
         var log = File.ReadAllText(Path.Combine(options.PlayerLogDirectory, "player-dummy-DP-2.log"));
         Assert.Contains("loaded " + model.FilePath + " (video) on DP-2 1920x1080", log);
@@ -246,7 +249,7 @@ public class ProcessWallpaperPlayerTests
         model = Core.Library.LibraryScanner.ScanFolder(model.LivelyInfoFolderPath)!;
         var factory = new WallpaperPlayerFactory(new CoreOptions(), new NullDesktopBackend(new DesktopSession(SessionType.Unknown, DesktopEnvironment.Unknown, null)));
 
-        Assert.Throws<WallpaperPlayerException>(() => factory.Create(model, DummyPlayer.Display()));
+        Assert.Throws<WallpaperPlayerException>(() => factory.Create(model, DummyPlayer.Display(), new PlaybackState(0, false)));
     }
 
     private static bool IsRunning(int pid)

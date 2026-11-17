@@ -31,6 +31,13 @@
     <method name="SetSettings">
       <arg name="settings" type="s" direction="in"/>
     </method>
+    <!-- pauses or resumes every wallpaper; wallpapers started later follow -->
+    <method name="SetPaused">
+      <arg name="paused" type="b" direction="in"/>
+    </method>
+    <method name="GetPaused">
+      <arg name="paused" type="b" direction="out"/>
+    </method>
     <method name="Quit"/>
     <!-- folder "" = closed -->
     <signal name="WallpaperChanged">
@@ -41,6 +48,10 @@
     <signal name="Error">
       <arg name="display" type="s"/>
       <arg name="message" type="s"/>
+    </signal>
+    <!-- sent only when the value changes -->
+    <signal name="PausedChanged">
+      <arg name="paused" type="b"/>
     </signal>
   </interface>
 </node>

@@ -57,7 +57,10 @@ namespace lively.Core.Wallpapers
     public interface IWallpaperPlayerFactory
     {
         /// <summary>Creates a player (not yet started) for <paramref name="model"/> on <paramref name="display"/>.</summary>
+        /// <param name="state">
+        /// Volume the player starts with. Pausing is up to the caller (the player can only be suspended once loaded).
+        /// </param>
         /// <exception cref="WallpaperPlayerException">No player is available for the wallpaper type.</exception>
-        IWallpaperPlayer Create(LibraryModel model, DisplayMonitor display);
+        IWallpaperPlayer Create(LibraryModel model, DisplayMonitor display, PlaybackState state);
     }
 }

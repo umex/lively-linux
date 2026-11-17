@@ -163,6 +163,26 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
         await service.ShutdownAsync();
 
         Assert.Equal(CoreErrors.Failed, await ErrorNameOf(() => client.SetWallpaperAsync(rain, "DP-1")));
+        Assert.Equal(CoreErrors.Failed, await ErrorNameOf(() => client.SetPausedAsync(true)));
+    }
+
+    [DBusFact]
+    public async Task SetPaused_RoundTripsAndSignals()
+    {
+        await StartAsync();
+        var paused = new ConcurrentQueue<bool>();
+        client.PausedChanged += (_, p) => paused.Enqueue(p);
+        Assert.False(await client.GetPausedAsync());
+
+        await client.SetPausedAsync(true);
+        Assert.True(await client.GetPausedAsync());
+        await Wait.UntilAsync(() => paused.Count == 1, "PausedChanged(true) signal");
+
+        await client.SetPausedAsync(true); // unchanged: no signal
+        await client.SetPausedAsync(false);
+        Assert.False(await client.GetPausedAsync());
+        await Wait.UntilAsync(() => paused.Count == 2, "PausedChanged(false) signal");
+        Assert.Equal([true, false], paused);
     }
 
     [DBusFact]
@@ -214,10 +234,12 @@ public sealed class DBusIntegrationTests : IAsyncLifetime
     {
         await StartAsync();
 
-        await client.SetSettingsAsync(new SettingsModel { Language = "de-DE", Startup = true });
+        Assert.Equal(0, (await client.GetSettingsAsync()).WallpaperVolume);
+        await client.SetSettingsAsync(new SettingsModel { Language = "de-DE", Startup = true, WallpaperVolume = 40 });
         var settings = await client.GetSettingsAsync();
         Assert.Equal("de-DE", settings.Language);
         Assert.True(settings.Startup);
+        Assert.Equal(40, settings.WallpaperVolume);
 
         var raw = new Core1(connections[^1], busName, lively.Common.Constants.DBus.CoreObjectPath);
         Assert.Equal(CoreErrors.InvalidSettings, await ErrorNameOf(() => raw.SetSettingsAsync("not json")));

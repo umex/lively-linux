@@ -11,6 +11,9 @@ public sealed class FakeWallpaperPlayer(LibraryModel model, DisplayMonitor scree
     /// <summary>Runs inside ShowAsync; throw to simulate a load failure.</summary>
     public Func<CancellationToken, Task> OnShow { get; set; } = _ => Task.CompletedTask;
 
+    /// <summary>State the factory created the player with.</summary>
+    public PlaybackState? State { get; init; }
+
     public bool IsLoaded { get; private set; }
     public bool IsExited => Volatile.Read(ref exited) == 1;
     public LibraryModel Model { get; } = model;

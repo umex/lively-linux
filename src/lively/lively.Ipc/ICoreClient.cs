@@ -32,6 +32,11 @@ namespace lively.Ipc
 
         Task SetSettingsAsync(SettingsModel settings);
 
+        /// <summary>Pauses or resumes every wallpaper.</summary>
+        Task SetPausedAsync(bool paused);
+
+        Task<bool> GetPausedAsync();
+
         /// <summary>Asks the daemon to close its wallpapers and exit.</summary>
         Task QuitAsync();
 
@@ -40,5 +45,8 @@ namespace lively.Ipc
         event EventHandler? DisplaysChanged;
 
         event EventHandler<CoreErrorEventArgs>? Error;
+
+        /// <summary>The wallpapers were paused (true) or resumed (false).</summary>
+        event EventHandler<bool>? PausedChanged;
     }
 }

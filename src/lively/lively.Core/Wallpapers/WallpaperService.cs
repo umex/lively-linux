@@ -1,5 +1,6 @@
 using lively.Core.Display;
 using lively.Core.Library;
+using lively.Core.Settings;
 using lively.Models;
 
 namespace lively.Core.Wallpapers
@@ -11,26 +12,45 @@ namespace lively.Core.Wallpapers
         private readonly IDisplayManager displayManager;
         private readonly IWallpaperPlayerFactory playerFactory;
         private readonly IWallpaperLayoutStore layoutStore;
+        private readonly ISettingsService? settings;
         // Serializes every mutation (set, close, restore, display and exit handling).
         private readonly SemaphoreSlim gate = new(1, 1);
         // Guarded by its own lock so that Wallpapers can be read while a mutation is running.
         private readonly List<IWallpaperPlayer> players = [];
         private readonly List<WallpaperLayoutModel> layout;
         private bool isShutdown;
+        // Written with the gate held, read without it.
+        private volatile bool isPaused;
+        private volatile int volume;
 
-        public WallpaperService(IDisplayManager displayManager, IWallpaperPlayerFactory playerFactory, IWallpaperLayoutStore layoutStore)
+        /// <param name="settings">
+        /// Source of <see cref="SettingsModel.WallpaperVolume"/>; the volume follows its changes. Without it the
+        /// wallpapers start muted.
+        /// </param>
+        public WallpaperService(IDisplayManager displayManager, IWallpaperPlayerFactory playerFactory, IWallpaperLayoutStore layoutStore,
+            ISettingsService? settings = null)
         {
             this.displayManager = displayManager;
             this.playerFactory = playerFactory;
             this.layoutStore = layoutStore;
+            this.settings = settings;
             layout = layoutStore.Load().ToList();
+            volume = Math.Clamp(settings?.Settings.WallpaperVolume ?? 0, 0, 100);
             displayManager.DisplaysChanged += OnDisplaysChanged;
+            if (settings != null)
+            {
+                settings.SettingsChanged += OnSettingsChanged;
+            }
         }
 
         public IReadOnlyList<IWallpaperPlayer> Wallpapers
         {
             get { lock (players) { return players.ToList(); } }
         }
+
+        public bool IsPaused => isPaused;
+
+        public int Volume => volume;
 
         /// <summary>Copy of the layout as currently intended (also what the layout file holds).</summary>
         public IReadOnlyList<WallpaperLayoutModel> Layout
@@ -41,6 +61,8 @@ namespace lively.Core.Wallpapers
         public event EventHandler<WallpaperChangedEventArgs>? WallpaperChanged;
 
         public event EventHandler<WallpaperErrorEventArgs>? WallpaperError;
+
+        public event EventHandler<bool>? PausedChanged;
 
         public async Task SetWallpaperAsync(LibraryModel model, DisplayMonitor display, CancellationToken ct = default)
         {
@@ -138,6 +160,58 @@ namespace lively.Core.Wallpapers
             }
         }
 
+        public async Task SetPausedAsync(bool paused)
+        {
+            await gate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                ThrowIfShutdown();
+                if (isPaused == paused)
+                {
+                    return;
+                }
+                isPaused = paused;
+                Logger.Info(paused ? "Pausing the wallpapers." : "Resuming the wallpapers.");
+                ForEachPlayer(p =>
+                {
+                    if (paused)
+                    {
+                        p.Pause();
+                    }
+                    else
+                    {
+                        p.Play();
+                    }
+                });
+                RaisePausedChanged(paused);
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
+        public async Task SetVolumeAsync(int volume)
+        {
+            var value = Math.Clamp(volume, 0, 100);
+            await gate.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                ThrowIfShutdown();
+                if (this.volume == value)
+                {
+                    return;
+                }
+                this.volume = value;
+                Logger.Info($"Wallpaper volume {value}.");
+                ForEachPlayer(p => p.SetVolume(value));
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
+
         public async Task ShutdownAsync()
         {
             await gate.WaitAsync().ConfigureAwait(false);
@@ -149,6 +223,10 @@ namespace lively.Core.Wallpapers
                 }
                 isShutdown = true;
                 displayManager.DisplaysChanged -= OnDisplaysChanged;
+                if (settings != null)
+                {
+                    settings.SettingsChanged -= OnSettingsChanged;
+                }
                 var closed = RemoveAll();
                 Logger.Info($"Shutting down, closing {closed.Count} wallpaper(s).");
                 await Task.WhenAll(closed.Select(CloseQuietlyAsync)).ConfigureAwait(false);
@@ -172,9 +250,10 @@ namespace lively.Core.Wallpapers
             }
 
             IWallpaperPlayer? player = null;
+            var paused = isPaused;
             try
             {
-                player = playerFactory.Create(model, display);
+                player = playerFactory.Create(model, display, new PlaybackState(volume, paused));
                 await player.ShowAsync(ct).ConfigureAwait(false);
             }
             catch (Exception e)
@@ -192,6 +271,11 @@ namespace lively.Core.Wallpapers
                 throw;
             }
 
+            if (paused)
+            {
+                // A player can only be suspended once it has loaded.
+                player.Pause();
+            }
             player.Exited += OnPlayerExited;
             lock (players)
             {
@@ -309,6 +393,32 @@ namespace lively.Core.Wallpapers
             _ = Task.Run(HandleDisplaysChangedAsync);
         }
 
+        private void OnSettingsChanged(object? sender, SettingsModel e)
+        {
+            var value = Math.Clamp(e.WallpaperVolume, 0, 100);
+            if (value != volume)
+            {
+                // The event is synchronous; the volume is applied once the gate is free.
+                _ = ApplySettingsVolumeAsync(value);
+            }
+        }
+
+        private async Task ApplySettingsVolumeAsync(int value)
+        {
+            try
+            {
+                await SetVolumeAsync(value).ConfigureAwait(false);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Shut down meanwhile.
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("Applying the wallpaper volume from the settings failed: " + ex);
+            }
+        }
+
         private async Task HandleDisplaysChangedAsync()
         {
             await gate.WaitAsync().ConfigureAwait(false);
@@ -371,6 +481,21 @@ namespace lively.Core.Wallpapers
             }
         }
 
+        private void ForEachPlayer(Action<IWallpaperPlayer> action)
+        {
+            foreach (var player in Wallpapers)
+            {
+                try
+                {
+                    action(player);
+                }
+                catch (Exception e)
+                {
+                    Logger.Error($"Sending to the wallpaper on {player.Screen.Id} failed: {e.Message}");
+                }
+            }
+        }
+
         private List<IWallpaperPlayer> RemoveAll()
         {
             lock (players)
@@ -424,6 +549,18 @@ namespace lively.Core.Wallpapers
             catch (Exception e)
             {
                 Logger.Error("WallpaperChanged handler failed: " + e);
+            }
+        }
+
+        private void RaisePausedChanged(bool paused)
+        {
+            try
+            {
+                PausedChanged?.Invoke(this, paused);
+            }
+            catch (Exception e)
+            {
+                Logger.Error("PausedChanged handler failed: " + e);
             }
         }
 

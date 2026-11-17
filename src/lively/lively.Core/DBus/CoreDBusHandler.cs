@@ -46,6 +46,7 @@ namespace lively.Core.DBus
             attached = true;
             wallpaperService.WallpaperChanged += OnWallpaperChanged;
             wallpaperService.WallpaperError += OnWallpaperError;
+            wallpaperService.PausedChanged += OnPausedChanged;
             displayManager.DisplaysChanged += OnDisplaysChanged;
         }
 
@@ -58,6 +59,7 @@ namespace lively.Core.DBus
             attached = false;
             wallpaperService.WallpaperChanged -= OnWallpaperChanged;
             wallpaperService.WallpaperError -= OnWallpaperError;
+            wallpaperService.PausedChanged -= OnPausedChanged;
             displayManager.DisplaysChanged -= OnDisplaysChanged;
         }
 
@@ -132,6 +134,17 @@ namespace lively.Core.DBus
             return ValueTask.CompletedTask;
         }
 
+        public async ValueTask SetPausedAsync(bool paused)
+        {
+            Logger.Info($"D-Bus SetPaused {paused}.");
+            await wallpaperService.SetPausedAsync(paused).ConfigureAwait(false);
+        }
+
+        public ValueTask<bool> GetPausedAsync()
+        {
+            return ValueTask.FromResult(wallpaperService.IsPaused);
+        }
+
         public ValueTask QuitAsync()
         {
             Logger.Info("D-Bus Quit.");
@@ -196,6 +209,11 @@ namespace lively.Core.DBus
         private void OnDisplaysChanged(object? sender, EventArgs e)
         {
             Connection.EmitDisplaysChanged(Path);
+        }
+
+        private void OnPausedChanged(object? sender, bool paused)
+        {
+            Connection.EmitPausedChanged(Path, paused);
         }
 
         #endregion

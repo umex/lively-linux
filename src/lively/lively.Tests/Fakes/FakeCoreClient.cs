@@ -10,18 +10,23 @@ public sealed class FakeCoreClient : ICoreClient
     public List<RunningWallpaper> Running { get; } = [];
     public List<(string Method, string Arg1, string Arg2)> Calls { get; } = [];
 
-    /// <summary>When set, every call except GetDisplays/GetWallpapers throws it.</summary>
+    /// <summary>When set, every recorded call (the ones in <see cref="Calls"/>) throws it.</summary>
     public Exception? CallError { get; set; }
 
     public bool Connected { get; private set; }
 
+    /// <summary>Returned by GetPausedAsync.</summary>
+    public bool Paused { get; set; }
+
     public event EventHandler<CoreWallpaperChangedEventArgs>? WallpaperChanged;
     public event EventHandler? DisplaysChanged;
     public event EventHandler<CoreErrorEventArgs>? Error;
+    public event EventHandler<bool>? PausedChanged;
 
     public void RaiseWallpaperChanged(string display, string? folder) => WallpaperChanged?.Invoke(this, new CoreWallpaperChangedEventArgs(display, folder));
     public void RaiseDisplaysChanged() => DisplaysChanged?.Invoke(this, EventArgs.Empty);
     public void RaiseError(string display, string message) => Error?.Invoke(this, new CoreErrorEventArgs(display, message));
+    public void RaisePausedChanged(bool paused) => PausedChanged?.Invoke(this, paused);
 
     public Task ConnectAsync(CancellationToken ct = default)
     {
@@ -42,6 +47,10 @@ public sealed class FakeCoreClient : ICoreClient
     public Task<SettingsModel> GetSettingsAsync() => Task.FromResult(new SettingsModel());
 
     public Task SetSettingsAsync(SettingsModel settings) => Record("SetSettings");
+
+    public Task SetPausedAsync(bool paused) => Record("SetPaused", paused.ToString());
+
+    public Task<bool> GetPausedAsync() => Task.FromResult(Paused);
 
     public Task QuitAsync() => Record("Quit");
 
