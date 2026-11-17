@@ -68,12 +68,21 @@ public class DesktopSessionDetectorTests
     [Fact]
     public void WaylandBackend_PassesOutputAndDesktop()
     {
-        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"));
+        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"), hasLayerShell: true);
 
         var args = backend.GetPlayerArguments(new DisplayMonitor { Id = "DP-1" });
 
         Assert.Equal(["--wallpaper-backend", "wayland", "--wallpaper-output", "DP-1", "--wallpaper-desktop", "kde"], args);
-        Assert.False(backend.CanPlaceWallpapers);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WaylandBackend_PlacesWallpapersOnlyWithLayerShell(bool hasLayerShell)
+    {
+        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Gnome, "GNOME"), hasLayerShell);
+
+        Assert.Equal(hasLayerShell, backend.CanPlaceWallpapers);
     }
 
     [Fact]

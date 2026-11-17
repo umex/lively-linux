@@ -28,6 +28,28 @@ public class WaylandDisplayManagerTests(ITestOutputHelper output)
     }
 
     [WaylandFact]
+    public void Snapshot_ListsGlobalsAndPrimary()
+    {
+        var snapshot = WaylandOutputEnumerator.Snapshot();
+        output.WriteLine("Globals: " + string.Join(", ", snapshot.Globals.Order(StringComparer.Ordinal)));
+        output.WriteLine("Primary output name: " + (snapshot.PrimaryOutputName ?? "(none)"));
+        foreach (var d in snapshot.Displays)
+        {
+            output.WriteLine($"{d}{(d.IsPrimary ? " [primary]" : "")}");
+        }
+
+        Assert.Contains("wl_compositor", snapshot.Globals);
+        Assert.Contains("wl_output", snapshot.Globals);
+        var primary = Assert.Single(snapshot.Displays, x => x.IsPrimary);
+        var desktop = Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP") ?? string.Empty;
+        if (desktop.Contains("KDE", StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.NotNull(snapshot.PrimaryOutputName);
+            Assert.Equal(snapshot.PrimaryOutputName, primary.Id);
+        }
+    }
+
+    [WaylandFact]
     public void Enumerate_RepeatedCallsGiveTheSameResult()
     {
         var first = WaylandOutputEnumerator.Enumerate();

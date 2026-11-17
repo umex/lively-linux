@@ -12,8 +12,9 @@ namespace lively.Core.Desktop
         DesktopSession Session { get; }
 
         /// <summary>
-        /// True when the backend can actually place wallpaper windows. Always false in Phase 2:
-        /// players are started but not attached to the desktop.
+        /// True when the backend can actually place wallpaper windows behind the desktop: on Wayland, the
+        /// compositor advertises <c>zwlr_layer_shell_v1</c>. False otherwise (X11, unknown sessions, fake
+        /// displays): players are started but not attached to the desktop.
         /// </summary>
         bool CanPlaceWallpapers { get; }
 

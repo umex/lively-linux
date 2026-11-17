@@ -219,7 +219,7 @@ public class ProcessWallpaperPlayerTests
     {
         using var tmp = new TempDirectory();
         var options = new CoreOptions { PlayerLogDirectory = tmp.Combine("logs") };
-        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"));
+        var backend = new WaylandDesktopBackend(new DesktopSession(SessionType.Wayland, DesktopEnvironment.Kde, "KDE"), hasLayerShell: true);
         var factory = new WallpaperPlayerFactory(options, backend);
         var model = DummyPlayer.Model(tmp);
 
