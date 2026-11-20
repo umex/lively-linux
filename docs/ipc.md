@@ -110,6 +110,13 @@ Rules:
 
 `SetSettings` replaces the whole object; missing properties get their defaults.
 
+`WallpaperVolume` is 0 (muted) by default, so wallpapers start without sound. The UI's Library page
+has a **Mute**/**Unmute** button and a 0-100 slider for it: it reads the settings when it connects
+and writes a change with `GetSettings`, then `SetSettings` of the same object with the new volume
+(the other settings are kept), 300 ms after the last slider move or at once for the button. Unmute
+restores the last volume above 0, else 50. There is no settings-changed signal, so a change made
+by another client shows in the UI after its next start.
+
 ### Concurrency
 
 Method calls run on the thread pool, so a `SetWallpaper` waiting for its player does not block
@@ -492,9 +499,16 @@ shader pipeline cache to `~/.cache/lively-wallpaper/lively-player-web`
   sets its lifecycle state to `Frozen` (Chromium stops the page's scripts and rendering) and mutes
   it. `cmd_resume` makes the page active again and drops the still 250 ms later. A suspend that
   arrives before the load takes effect once loaded; a reload or retry during a suspend waits for
-  the resume.
+  the resume. Chromium pauses the `<video>` and `<audio>` elements of a frozen page and does not
+  play them again, so a script that the player adds to every frame (also cross-origin iframes, in
+  an isolated world the page cannot see) remembers on the page's `freeze` event which of its
+  document's media elements were playing and plays them again on `resume`. Web Audio
+  (`AudioContext`) runs again by itself.
 - `cmd_volume` 0 mutes, any other value unmutes: QtWebEngine has no per-page volume level. The
-  value from `--wallpaper-volume` applies from the start.
+  value from `--wallpaper-volume` applies from the start. Sound goes to the default output as a
+  PulseAudio/PipeWire stream with `application.name` and node name `lively-player-web`, created
+  by Chromium's audio process (`QtWebEngineProcess`) once the page plays sound while unmuted; a
+  player muted from the start has no stream. Muting and `cmd_suspend` cork the stream.
 - `cmd_screenshot` ([Screenshots](#screenshots)): `Delay` starts at the request when the page has
   loaded, else when it has; the capture is at least 250 ms after the load. While a page's load
   keeps failing (a `url` wallpaper retrying) the request waits, so an error or blank page is never
@@ -528,6 +542,10 @@ code.
 
 - One Chromium instance (with its helper processes) per display, a few hundred MB each.
 - Mute and unmute only, no volume level.
+- Media elements outside the document (`new Audio()` never attached) or in shadow trees stay
+  paused after `cmd_suspend` and `cmd_resume`.
+- Sites with a cookie consent dialog (YouTube in the EU) keep their video paused until the choice
+  is clicked in the wallpaper (mouse input works); the profile keeps the choice.
 - No keyboard input, so pages that need a login cannot be signed into.
 - Desktop icons and widgets are covered on KDE, as with `lively-player-mpv`.
 - No `LivelyProperties.json` controls, JavaScript API bridge or audio data yet (Phase 4b).
@@ -547,9 +565,13 @@ $P --wallpaper-url ~/pages/aurora.html --wallpaper-type web --wallpaper-output D
 # prints started …, {"Type":2,"Success":true} and WebGL: …; the page shows behind the windows on DP-1
 {"Type":7}                                                          # suspend
 {"Type":8}                                                          # resume
+{"Type":9,"Volume":50}                                              # unmute (0 mutes)
 {"Type":6,"Format":0,"FilePath":"/tmp/shot.jpg","Delay":500,"Width":480}
 {"Type":5}                                                          # exit 0; Ctrl+D and kill -TERM also exit 0
 ```
+
+The sound stream: `pactl list sink-inputs | grep -B20 'application.name = "lively-player-web"'`
+shows its state (`Corked`, `Mute`); `pactl list sink-inputs short` does not name the application.
 
 Built alone: `cmake -S lively.Player.Web -B lively.Player.Web/build -DCMAKE_BUILD_TYPE=Release &&
 cmake --build lively.Player.Web/build -j` (the `build/` folder is ignored by git).

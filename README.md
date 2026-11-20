@@ -154,7 +154,8 @@ Interfaces, error names, `busctl` examples, start-up and the player protocol are
     Web wallpapers get a thumbnail from the page a few seconds after they first run. <br>
     Right-click a wallpaper and choose **Set Wallpaper**; **Pause** pauses every wallpaper <br>
     (not remembered across daemon restarts). <br>
-    Wallpapers start muted (`WallpaperVolume` 0).
+    Wallpapers start muted (`WallpaperVolume` 0): **Unmute** or the volume slider turns the sound on <br>
+    (video wallpapers play at the slider's level; web wallpapers are either muted or at full volume).
 
     *On KDE Plasma the wallpaper covers the desktop icons and widgets <br>
     while it runs; they come back when it is closed.*

@@ -159,8 +159,8 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 - Known limitations: desktop icons and widgets covered on KDE; only the integer `wl_output.scale`
   (no `wp_fractional_scale_v1`), read once when the player starts; no wallpaper on X11 (dummy
   player); GNOME has no layer-shell; other layer-shell compositors untested; no settings page yet
-  (`Startup` and `WallpaperVolume` are set over D-Bus); the core does not send `cmd_reload` or
-  mute yet. Not checked: whether a plasmashell restart stacks its desktop above the wallpaper.
+  (`Startup` is set over D-Bus; `WallpaperVolume` got a control on the Library page in Phase 4a);
+  the core does not send `cmd_reload` or mute yet. Not checked: whether a plasmashell restart stacks its desktop above the wallpaper.
 
 ### Phase 4a — Web wallpapers: websites (done)
 
@@ -187,8 +187,16 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
   fails the player. A `url` wallpaper reports loaded as soon as its surface is shown and retries a
   failed load every 15 s, so a wallpaper restored at login before the network is up recovers.
 - Pause: `cmd_suspend` grabs the current frame into a still image, hides the view, sets its
-  lifecycle state to `Frozen` and mutes it; `cmd_resume` reverses this. Volume: QtWebEngine has no
-  per-page volume, so `cmd_volume` 0 mutes and any other value unmutes.
+  lifecycle state to `Frozen` and mutes it; `cmd_resume` reverses this. Chromium pauses the
+  `<video>`/`<audio>` elements of a frozen page and never plays them again, so a pause used to stop
+  a page's video and sound for good; a script in every frame (application world) now plays the
+  elements that were playing at the freeze again on resume. Volume: QtWebEngine has no per-page
+  volume, so `cmd_volume` 0 mutes and any other value unmutes.
+- Volume control: the Library page has a **Mute**/**Unmute** button and a 0-100 slider for
+  `WallpaperVolume` (read at start; written 300 ms after the last slider change, at once for the
+  button, through `GetSettings`/`SetSettings` so the other settings are kept). Unmute restores the
+  last level above 0, else 50. The default stays 0, so every wallpaper starts muted until the user
+  turns the volume up; this was the cause of "a YouTube wallpaper has no sound" on 2026-11-20.
 - Profiles: one QtWebEngine profile per display in `~/.cache/lively-wallpaper/WebEngine/<display>`
   (`--web-profile`), so two players never share a storage path. Cookies and local storage persist
   there. Qt Quick keeps its shader pipeline cache in `~/.cache/lively-wallpaper/lively-player-web`.
@@ -219,6 +227,10 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 - Known limitations:
   - One Chromium instance per monitor, a few hundred MB each.
   - Mute and unmute only, no volume level.
+  - Media elements that are not in the document (`new Audio()` never attached) or sit in shadow
+    trees stay paused after a pause and resume; Web Audio resumes by itself.
+  - Sites with a cookie consent dialog (YouTube in the EU) keep their video paused until the choice
+    is clicked in the wallpaper; the choice is kept in the display's profile.
   - Mouse only; the wallpaper never takes keyboard focus, so pages that need a login cannot be
     signed into.
   - Desktop icons and widgets are still covered on KDE, as in Phase 3, and a web wallpaper also
@@ -237,8 +249,15 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 - Mouse input was checked by the user on 2026-11-20 (move, click, drag, wheel; no key events).
   The view needs `activeFocusOnPress: true`: with false, QtWebEngine drops every mouse event
   except the wheel on a window that never has focus.
-- Not verified: removal of an output while a page runs,
-  compositors without layer-shell, fractional scaling, and an audible audio level.
+- Audio was checked on 2026-11-20 by the PipeWire stream (`application.name` `lively-player-web`,
+  node `lively-player-web`), not by ear: no stream while the player is muted from the start, a
+  running uncorked stream with signal after `cmd_volume` 50 (Web Audio oscillator, Opus `<audio>`,
+  `<audio>` in an iframe, and a YouTube page), the stream corked by `cmd_volume` 0 and by
+  `cmd_suspend`, and running again after `cmd_volume` 50 and `cmd_resume`. QtWebEngine 6.11.2 on
+  Fedora 44 reports H.264, AAC, HEVC, VP9, AV1, Opus and Vorbis as playable; YouTube served AV1 and
+  Opus.
+- Not verified: removal of an output while a page runs, compositors without layer-shell and
+  fractional scaling.
 
 ### Phase 4b — Web wallpapers: Lively wallpapers
 
