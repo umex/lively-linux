@@ -221,7 +221,10 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
   - Mute and unmute only, no volume level.
   - Mouse only; the wallpaper never takes keyboard focus, so pages that need a login cannot be
     signed into.
-  - Desktop icons and widgets are still covered on KDE, as in Phase 3.
+  - Desktop icons and widgets are still covered on KDE, as in Phase 3, and a web wallpaper also
+    takes the mouse clicks meant for them. Plasma's desktop and the wallpaper are both
+    background-layer surfaces; KWin draws the one mapped last on top and a client cannot lower
+    itself. Accepted by the user for Phase 4a on 2026-11-20; see the option under Phase 7.
   - Lively wallpapers with `LivelyProperties.json` load but cannot be customized, and audio
     visualizers get no audio data, until Phase 4b.
   - `mediump` precision: on Mesa/AMD, QtWebEngine's ANGLE uses the OpenGL ES backend and the
@@ -231,7 +234,10 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
     `QSG_RHI_BACKEND=vulkan`, `AMD_DEBUG=nofp16`, driconf `radeonsi_mediump=false`,
     `--use-angle=gl`, `gl-egl` and `vulkan` (vulkan gives different artifacts), and
     `--disable-angle-features=enablePrecisionQualifiers`.
-- Not verified: real pointer clicks reaching a page, removal of an output while a page runs,
+- Mouse input was checked by the user on 2026-11-20 (move, click, drag, wheel; no key events).
+  The view needs `activeFocusOnPress: true`: with false, QtWebEngine drops every mouse event
+  except the wheel on a window that never has focus.
+- Not verified: removal of an output while a page runs,
   compositors without layer-shell, fractional scaling, and an audible audio level.
 
 ### Phase 4b — Web wallpapers: Lively wallpapers
@@ -266,6 +272,12 @@ Decided on 2026-11-17; not part of Phase 4a.
 - `lively-player-mpv` on other `wlr-layer-shell` compositors (Hyprland, Sway, COSMIC, niri):
   test and fix; GNOME Shell extension; X11.
 - Option: a Plasma wallpaper plugin as an icon-friendly KDE backend (could also ship in Phase 8).
+  For web wallpapers the preferred design (2026-11-20, to be revisited) keeps Chromium out of
+  plasmashell: the player renders offscreen and sends frames (shared memory first, then dmabuf
+  or PipeWire) to a thin wallpaper plugin, which sends mouse events back from a non-consuming
+  event filter. waywallen-display (MIT) does this and is the reference. Running the
+  `WebEngineView` inside plasmashell was rejected because a Chromium hang or crash would take
+  the desktop and panels with it.
 
 ### Phase 8 — Packaging and release
 
