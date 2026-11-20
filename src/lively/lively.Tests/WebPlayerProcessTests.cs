@@ -155,6 +155,73 @@ public sealed class WebPlayerProcessTests : IDisposable
     }
 
     [WebPlayerFact]
+    public async Task MediaPlaysAgainAfterSuspendAndResume()
+    {
+        // Chromium pauses the <audio>/<video> elements of a frozen page and leaves them paused; the player plays
+        // them again on resume. The file is silent and the player muted (volume 0), so nothing is heard.
+        var display = FirstDisplay();
+        var log = LogPath(display);
+        var folder = WallpaperFixture.CreateWeb(tmp, "media", "Media");
+        File.WriteAllBytes(Path.Combine(folder, "silence.wav"), SilentWav(seconds: 2));
+        File.WriteAllText(Path.Combine(folder, "index.html"), """
+            <!doctype html>
+            <html><head><meta charset="utf-8"><title>media test</title></head>
+            <body style="background:#000">
+            <audio id="a" autoplay loop src="silence.wav"></audio>
+            <script>
+            const a = document.getElementById('a');
+            a.addEventListener('playing', () => console.log('media playing'));
+            a.addEventListener('pause', () => console.log('media paused'));
+            </script>
+            </body></html>
+            """);
+        using var player = Create(LibraryScanner.ScanFolder(folder)!, display);
+        var console = new ConsoleRecorder(player);
+        static int Count(IReadOnlyList<string> messages, string text) => messages.Count(m => m.Contains(text, StringComparison.Ordinal));
+        try
+        {
+            await player.ShowAsync();
+            console.WaitFor(m => Count(m, "media playing") == 1, "the page's audio started.");
+
+            player.Pause();
+            Wait.Until(() => ReadLog(log).Contains("suspended: page frozen", StringComparison.Ordinal), "page frozen. Log: " + ReadLog(log));
+            player.Play();
+
+            console.WaitFor(m => Count(m, "media paused") >= 1 && Count(m, "media playing") >= 2,
+                "the frozen page paused its audio and it played again after the resume.");
+        }
+        finally
+        {
+            player.Terminate();
+        }
+    }
+
+    /// <summary>A mono 16-bit 8 kHz WAV file of silence.</summary>
+    private static byte[] SilentWav(int seconds)
+    {
+        const int rate = 8000;
+        var dataLength = rate * 2 * seconds;
+        using var stream = new MemoryStream();
+        using (var w = new BinaryWriter(stream, System.Text.Encoding.ASCII, leaveOpen: true))
+        {
+            w.Write("RIFF"u8);
+            w.Write(36 + dataLength);
+            w.Write("WAVEfmt "u8);
+            w.Write(16);
+            w.Write((short)1); // PCM
+            w.Write((short)1); // mono
+            w.Write(rate);
+            w.Write(rate * 2); // byte rate
+            w.Write((short)2); // block align
+            w.Write((short)16); // bits per sample
+            w.Write("data"u8);
+            w.Write(dataLength);
+            w.Write(new byte[dataLength]);
+        }
+        return stream.ToArray();
+    }
+
+    [WebPlayerFact]
     public void ExitsOnStdinEof()
     {
         var display = FirstDisplay();

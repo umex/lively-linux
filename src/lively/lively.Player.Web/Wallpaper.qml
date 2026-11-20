@@ -86,8 +86,37 @@ Window {
             }
         })()`
 
+        // Chromium pauses the playing <video> and <audio> elements of a frozen page and does not play them again
+        // when it becomes active, so a suspend would stop a page's video and sound for good. This script runs in
+        // every frame (also cross-origin iframes), in the application world, so the page cannot see or break it:
+        // on the page's freeze event it remembers the media elements of its document that are playing, on the
+        // resume event it plays those that are still paused. Media elements outside the document (new Audio()
+        // never attached) or in shadow trees are not found. Web Audio needs nothing: an AudioContext runs again
+        // by itself.
+        readonly property string mediaResumeScript: `(() => {
+            let playing = [];
+            document.addEventListener('freeze', () => {
+                playing = Array.from(document.querySelectorAll('video, audio')).filter(m => !m.paused && !m.ended);
+            }, true);
+            document.addEventListener('resume', () => {
+                const wake = playing;
+                playing = [];
+                for (const m of wake) {
+                    if (m.isConnected && m.paused)
+                        m.play().catch(() => {});
+                }
+            }, true);
+        })()`
+
         anchors.fill: parent
         profile: root.profile
+        userScripts.collection: [{
+            name: "lively-media-resume",
+            sourceCode: mediaResumeScript,
+            injectionPoint: WebEngineScript.DocumentCreation,
+            worldId: WebEngineScript.ApplicationWorld,
+            runsOnSubFrames: true
+        }]
         backgroundColor: "black"
         audioMuted: root.player.muted || root.player.suspended
         // Must stay true: with false, QtWebEngine drops every mouse press, move, release, hover and touch
