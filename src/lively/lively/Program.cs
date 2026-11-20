@@ -20,11 +20,11 @@ namespace lively
             using var instance = SingleInstance.Acquire();
             if (!instance.IsPrimary)
             {
-                // Video files on the command line are imported by the running instance.
-                var files = FileUris.CommandLinePaths(args);
-                if (files.Count > 0)
+                // Files, page folders and web addresses on the command line are imported by the running instance.
+                var targets = FileUris.CommandLineTargets(args);
+                if (targets.Count > 0)
                 {
-                    instance.OpenPrimary(FileUris.ToUris(files), TimeSpan.FromSeconds(5));
+                    instance.OpenPrimary(FileUris.ToUris(targets), TimeSpan.FromSeconds(5));
                 }
                 else
                 {

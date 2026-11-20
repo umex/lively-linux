@@ -16,6 +16,17 @@ namespace lively.Core.Wallpapers
         public string? FolderPath { get; }
     }
 
+    public sealed class WallpaperUpdatedEventArgs : EventArgs
+    {
+        public WallpaperUpdatedEventArgs(string folderPath)
+        {
+            FolderPath = folderPath;
+        }
+
+        /// <summary>Wallpaper folder whose LivelyInfo.json changed.</summary>
+        public string FolderPath { get; }
+    }
+
     public sealed class WallpaperErrorEventArgs : EventArgs
     {
         public WallpaperErrorEventArgs(string displayId, Exception error)
@@ -86,5 +97,11 @@ namespace lively.Core.Wallpapers
         /// service's lock held like the other events, so handlers must not call back into the service.
         /// </summary>
         event EventHandler<bool>? PausedChanged;
+
+        /// <summary>
+        /// A wallpaper folder's LivelyInfo.json changed, for now only when a web wallpaper got its thumbnail.
+        /// Raised on a thread-pool thread without the service's lock.
+        /// </summary>
+        event EventHandler<WallpaperUpdatedEventArgs>? WallpaperUpdated;
     }
 }

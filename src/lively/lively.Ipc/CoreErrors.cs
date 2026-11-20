@@ -17,7 +17,10 @@ namespace lively.Ipc
         /// <summary>The settings JSON is malformed or not a settings object.</summary>
         public const string InvalidSettings = Constants.DBus.ErrorPrefix + "InvalidSettings";
 
-        /// <summary>ImportVideo failed: relative or missing path, no video stream, ffmpeg missing or failing.</summary>
+        /// <summary>
+        /// ImportVideo, ImportWeb or AddUrl failed: relative or missing path, no video stream, ffmpeg missing or
+        /// failing, no usable HTML page, not an http(s) address.
+        /// </summary>
         public const string ImportFailed = Constants.DBus.ErrorPrefix + "ImportFailed";
 
         /// <summary>Anything else, for example a call that arrives while the daemon shuts down.</summary>

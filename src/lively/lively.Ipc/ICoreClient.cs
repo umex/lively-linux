@@ -42,6 +42,16 @@ namespace lively.Ipc
         /// <returns>The new wallpaper folder.</returns>
         Task<string> ImportVideoAsync(string path);
 
+        /// <summary>Copies an .html/.htm file, or a folder with a web page, into the library.</summary>
+        /// <param name="path">Absolute path of the file or folder.</param>
+        /// <returns>The new wallpaper folder.</returns>
+        Task<string> ImportWebAsync(string path);
+
+        /// <summary>Adds a website address to the library.</summary>
+        /// <param name="url">Absolute http or https address.</param>
+        /// <returns>The new wallpaper folder.</returns>
+        Task<string> AddUrlAsync(string url);
+
         /// <summary>Asks the daemon to close its wallpapers and exit.</summary>
         Task QuitAsync();
 
@@ -53,5 +63,8 @@ namespace lively.Ipc
 
         /// <summary>The wallpapers were paused (true) or resumed (false).</summary>
         event EventHandler<bool>? PausedChanged;
+
+        /// <summary>A wallpaper folder's LivelyInfo.json changed (a web wallpaper got its thumbnail).</summary>
+        event EventHandler<CoreWallpaperUpdatedEventArgs>? WallpaperUpdated;
     }
 }

@@ -25,9 +25,13 @@ public sealed class FakeWallpaperPlayer(LibraryModel model, DisplayMonitor scree
 
     public event EventHandler? Loaded;
     public event EventHandler? Exited;
-#pragma warning disable CS0067 // never raised by the fake
     public event EventHandler<IpcMessage>? MessageReceived;
-#pragma warning restore CS0067
+
+    /// <summary>Number of MessageReceived subscribers.</summary>
+    public int MessageSubscribers => MessageReceived?.GetInvocationList().Length ?? 0;
+
+    /// <summary>Simulates a message from the player process.</summary>
+    public void RaiseMessage(IpcMessage message) => MessageReceived?.Invoke(this, message);
 
     public async Task ShowAsync(CancellationToken ct = default)
     {

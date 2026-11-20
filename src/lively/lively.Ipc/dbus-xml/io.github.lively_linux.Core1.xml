@@ -43,6 +43,16 @@
       <arg name="path" type="s" direction="in"/>
       <arg name="folder" type="s" direction="out"/>
     </method>
+    <!-- copies an .html/.htm file or a page folder (absolute path) into the library; returns the new wallpaper folder -->
+    <method name="ImportWeb">
+      <arg name="path" type="s" direction="in"/>
+      <arg name="folder" type="s" direction="out"/>
+    </method>
+    <!-- adds an absolute http(s) address to the library as a url wallpaper; returns the new wallpaper folder -->
+    <method name="AddUrl">
+      <arg name="url" type="s" direction="in"/>
+      <arg name="folder" type="s" direction="out"/>
+    </method>
     <method name="Quit"/>
     <!-- folder "" = closed -->
     <signal name="WallpaperChanged">
@@ -57,6 +67,10 @@
     <!-- sent only when the value changes -->
     <signal name="PausedChanged">
       <arg name="paused" type="b"/>
+    </signal>
+    <!-- the LivelyInfo.json of a wallpaper folder changed (a web wallpaper got its thumbnail); reload that folder -->
+    <signal name="WallpaperUpdated">
+      <arg name="folder" type="s"/>
     </signal>
   </interface>
 </node>

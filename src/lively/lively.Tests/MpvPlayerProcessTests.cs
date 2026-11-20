@@ -8,6 +8,7 @@ namespace lively.Tests;
 /// <summary>
 /// Runs lively-player-mpv on the real desktop: a 2 s test video briefly covers the first output's wallpaper.
 /// </summary>
+[Collection(DesktopCollection.Name)]
 public class MpvPlayerProcessTests
 {
     private static readonly TimeSpan LoadTimeout = TimeSpan.FromSeconds(15);

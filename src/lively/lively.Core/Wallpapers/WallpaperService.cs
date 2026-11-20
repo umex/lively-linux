@@ -13,6 +13,8 @@ namespace lively.Core.Wallpapers
         private readonly IWallpaperPlayerFactory playerFactory;
         private readonly IWallpaperLayoutStore layoutStore;
         private readonly ISettingsService? settings;
+        // Null without CoreOptions: no thumbnails are made.
+        private readonly WebThumbnails? thumbnails;
         // Serializes every mutation (set, close, restore, display and exit handling).
         private readonly SemaphoreSlim gate = new(1, 1);
         // Guarded by its own lock so that Wallpapers can be read while a mutation is running.
@@ -27,13 +29,22 @@ namespace lively.Core.Wallpapers
         /// Source of <see cref="SettingsModel.WallpaperVolume"/>; the volume follows its changes. Without it the
         /// wallpapers start muted.
         /// </param>
+        /// <param name="options">
+        /// Its <see cref="CoreOptions.WallpapersDirectory"/> is where web wallpapers get thumbnails made by their
+        /// player. Without it no thumbnails are made.
+        /// </param>
         public WallpaperService(IDisplayManager displayManager, IWallpaperPlayerFactory playerFactory, IWallpaperLayoutStore layoutStore,
-            ISettingsService? settings = null)
+            ISettingsService? settings = null, CoreOptions? options = null)
         {
             this.displayManager = displayManager;
             this.playerFactory = playerFactory;
             this.layoutStore = layoutStore;
             this.settings = settings;
+            if (options != null)
+            {
+                thumbnails = new WebThumbnails(options.WallpapersDirectory);
+                thumbnails.Updated += (_, folder) => RaiseUpdated(folder);
+            }
             layout = layoutStore.Load().ToList();
             volume = Math.Clamp(settings?.Settings.WallpaperVolume ?? 0, 0, 100);
             displayManager.DisplaysChanged += OnDisplaysChanged;
@@ -63,6 +74,8 @@ namespace lively.Core.Wallpapers
         public event EventHandler<WallpaperErrorEventArgs>? WallpaperError;
 
         public event EventHandler<bool>? PausedChanged;
+
+        public event EventHandler<WallpaperUpdatedEventArgs>? WallpaperUpdated;
 
         public async Task SetWallpaperAsync(LibraryModel model, DisplayMonitor display, CancellationToken ct = default)
         {
@@ -181,6 +194,8 @@ namespace lively.Core.Wallpapers
                     else
                     {
                         p.Play();
+                        // Players that loaded while paused have not been asked for a thumbnail yet.
+                        thumbnails?.Request(p);
                     }
                 });
                 RaisePausedChanged(paused);
@@ -303,6 +318,11 @@ namespace lively.Core.Wallpapers
 
             Logger.Info($"Wallpaper {folder} running on {display.Id}.");
             RaiseChanged(display.Id, folder);
+            if (!paused)
+            {
+                // While paused the player shows a frozen still, possibly from before the page was drawn.
+                thumbnails?.Request(player);
+            }
 
             if (player.IsExited)
             {
@@ -372,6 +392,7 @@ namespace lively.Core.Wallpapers
                     return;
                 }
                 player.Exited -= OnPlayerExited;
+                thumbnails?.Forget(player);
                 player.Dispose();
                 var id = player.Screen.Id;
                 Logger.Error($"Wallpaper player on {id} exited unexpectedly ({player.Model.LivelyInfoFolderPath}).");
@@ -509,6 +530,7 @@ namespace lively.Core.Wallpapers
         private async Task CloseQuietlyAsync(IWallpaperPlayer player)
         {
             player.Exited -= OnPlayerExited;
+            thumbnails?.Forget(player);
             try
             {
                 await player.CloseAsync().ConfigureAwait(false);
@@ -549,6 +571,18 @@ namespace lively.Core.Wallpapers
             catch (Exception e)
             {
                 Logger.Error("WallpaperChanged handler failed: " + e);
+            }
+        }
+
+        private void RaiseUpdated(string folder)
+        {
+            try
+            {
+                WallpaperUpdated?.Invoke(this, new WallpaperUpdatedEventArgs(folder));
+            }
+            catch (Exception e)
+            {
+                Logger.Error("WallpaperUpdated handler failed: " + e);
             }
         }
 

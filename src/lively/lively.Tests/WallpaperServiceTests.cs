@@ -376,6 +376,7 @@ public sealed class WallpaperServiceTests : IDisposable
                 o.SettingsPath = tmp.Combine("config", "Settings.json");
                 o.LayoutPath = tmp.Combine("config", "WallpaperLayout.json");
                 o.PlayerLogDirectory = tmp.Combine("logs");
+                o.WallpapersDirectory = tmp.Combine("library", "wallpapers");
                 o.FakeDisplays = "A:1280x720@0,0;B:1280x720@1280,0";
             })
             .BuildServiceProvider();
@@ -385,6 +386,7 @@ public sealed class WallpaperServiceTests : IDisposable
         Assert.Equal(["A", "B"], displayManager.Displays.Select(x => x.Id));
         Assert.IsType<WallpaperService>(provider.GetRequiredService<IWallpaperService>());
         Assert.IsType<WallpaperPlayerFactory>(provider.GetRequiredService<IWallpaperPlayerFactory>());
+        Assert.Equal(tmp.Combine("library", "wallpapers"), provider.GetRequiredService<Core.Library.WebImporter>().WallpapersDirectory);
         // Fake displays never use a real backend, whatever the session.
         var backend = Assert.IsType<NullDesktopBackend>(provider.GetRequiredService<IDesktopBackend>());
         Assert.False(backend.CanPlaceWallpapers);

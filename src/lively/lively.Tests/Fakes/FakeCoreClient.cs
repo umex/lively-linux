@@ -22,11 +22,13 @@ public sealed class FakeCoreClient : ICoreClient
     public event EventHandler? DisplaysChanged;
     public event EventHandler<CoreErrorEventArgs>? Error;
     public event EventHandler<bool>? PausedChanged;
+    public event EventHandler<CoreWallpaperUpdatedEventArgs>? WallpaperUpdated;
 
     public void RaiseWallpaperChanged(string display, string? folder) => WallpaperChanged?.Invoke(this, new CoreWallpaperChangedEventArgs(display, folder));
     public void RaiseDisplaysChanged() => DisplaysChanged?.Invoke(this, EventArgs.Empty);
     public void RaiseError(string display, string message) => Error?.Invoke(this, new CoreErrorEventArgs(display, message));
     public void RaisePausedChanged(bool paused) => PausedChanged?.Invoke(this, paused);
+    public void RaiseWallpaperUpdated(string folder) => WallpaperUpdated?.Invoke(this, new CoreWallpaperUpdatedEventArgs(folder));
 
     public Task ConnectAsync(CancellationToken ct = default)
     {
@@ -44,20 +46,50 @@ public sealed class FakeCoreClient : ICoreClient
 
     public Task CloseAllWallpapersAsync() => Record("CloseAllWallpapers");
 
-    public Task<SettingsModel> GetSettingsAsync() => Task.FromResult(new SettingsModel());
+    /// <summary>The core's settings: GetSettingsAsync returns a copy, SetSettingsAsync replaces them.</summary>
+    public SettingsModel Settings { get; set; } = new();
 
-    public Task SetSettingsAsync(SettingsModel settings) => Record("SetSettings");
+    /// <summary>Number of GetSettingsAsync calls.</summary>
+    public int GetSettingsCalls { get; private set; }
+
+    public Task<SettingsModel> GetSettingsAsync()
+    {
+        GetSettingsCalls++;
+        return Task.FromResult(Copy(Settings));
+    }
+
+    /// <summary>Recorded as ("SetSettings", WallpaperVolume, "").</summary>
+    public async Task SetSettingsAsync(SettingsModel settings)
+    {
+        await Record("SetSettings", settings.WallpaperVolume.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Settings = Copy(settings);
+    }
+
+    private static SettingsModel Copy(SettingsModel settings) =>
+        Newtonsoft.Json.JsonConvert.DeserializeObject<SettingsModel>(Newtonsoft.Json.JsonConvert.SerializeObject(settings))!;
 
     public Task SetPausedAsync(bool paused) => Record("SetPaused", paused.ToString());
 
     public Task<bool> GetPausedAsync() => Task.FromResult(Paused);
 
-    /// <summary>Returned by ImportVideoAsync.</summary>
+    /// <summary>Returned by ImportVideoAsync, ImportWebAsync and AddUrlAsync.</summary>
     public string ImportResultFolder { get; set; } = "";
 
     public async Task<string> ImportVideoAsync(string path)
     {
         await Record("ImportVideo", path);
+        return ImportResultFolder;
+    }
+
+    public async Task<string> ImportWebAsync(string path)
+    {
+        await Record("ImportWeb", path);
+        return ImportResultFolder;
+    }
+
+    public async Task<string> AddUrlAsync(string url)
+    {
+        await Record("AddUrl", url);
         return ImportResultFolder;
     }
 

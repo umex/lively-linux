@@ -34,12 +34,14 @@ namespace lively.Core.Desktop
         }
 
         /// <summary>
-        /// Videos and GIFs play in <c>lively-player-mpv</c>, also without layer-shell: the player then fails with the
-        /// precise reason (no layer-shell, unknown output, missing libmpv). Everything else stays on the dummy.
+        /// Videos and GIFs play in <c>lively-player-mpv</c>, web pages and URLs (<c>web</c>, <c>webaudio</c>,
+        /// <c>url</c>) in <c>lively-player-web</c>, also without layer-shell: the player then fails with the precise
+        /// reason (no layer-shell, unknown output, missing library). Everything else stays on the dummy.
         /// </summary>
         public string? PlayerFor(WallpaperType type) => type switch
         {
             WallpaperType.video or WallpaperType.gif => WallpaperPlayerFactory.MpvPlayerName,
+            WallpaperType.web or WallpaperType.webaudio or WallpaperType.url => WallpaperPlayerFactory.WebPlayerName,
             _ => null,
         };
 

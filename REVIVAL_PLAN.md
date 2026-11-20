@@ -46,7 +46,7 @@ widgets). That was spike A below; Phase 3 answered it (the surface covers them).
    processes, which is also how upstream is structured.
 5. **Web wallpapers need an embedded browser.** Options: QtWebEngine (Chromium), WebKitGTK, or
    CEF. This is the largest compatibility risk, since many Lively wallpapers use WebGL and the
-   audio API.
+   audio API. Phase 4a chose QtWebEngine in a C++/Qt 6 player (see its notes).
 6. **Wayland hides global state.** Pause rules (fullscreen, focused app) and audio capture need
    compositor-specific protocols, PipeWire, MPRIS and UPower rather than one API.
 7. **Windows application wallpapers (`.exe`)** are out of scope.
@@ -59,10 +59,13 @@ widgets). That was spike A below; Phase 3 answered it (the surface covers them).
 
 - Target KDE Plasma on Wayland first, then generic layer-shell compositors, then GNOME and X11.
 - Keep C#/Avalonia for the manager app and a core service.
-- Write one small Qt 6/QML player (video through mpv, web through QtWebEngine). The same QML can
-  run on a layer-shell surface and inside a Plasma wallpaper plugin.
-- Alternative: an all-.NET player with GTK 4, gtk4-layer-shell and WebKitGTK. One language, but
-  weaker web compatibility and a library preload workaround.
+- One player program per kind of wallpaper, each on its own layer-shell surface: videos in a pure
+  .NET player on libmpv (Phase 3), web pages in a C++/Qt 6 player on QtWebEngine and LayerShellQt
+  (Phase 4a). This replaces the earlier idea of one Qt 6/QML player for both. A Plasma wallpaper
+  plugin stays an option for keeping the desktop icons on KDE.
+- Rejected for web wallpapers in Phase 4a: WebKitGTK driven from .NET (GTK 4, gtk4-layer-shell),
+  CEF with offscreen rendering, and a PySide6 host. QtWebEngine was chosen for Chromium's
+  compatibility with interactive websites and WebGL.
 
 ## Action plan
 
@@ -156,13 +159,122 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 - Known limitations: desktop icons and widgets covered on KDE; only the integer `wl_output.scale`
   (no `wp_fractional_scale_v1`), read once when the player starts; no wallpaper on X11 (dummy
   player); GNOME has no layer-shell; other layer-shell compositors untested; no settings page yet
-  (`Startup` and `WallpaperVolume` are set over D-Bus); the core does not send `cmd_reload` or
-  mute yet. Not checked: whether a plasmashell restart stacks its desktop above the wallpaper.
+  (`Startup` is set over D-Bus; `WallpaperVolume` got a control on the Library page in Phase 4a);
+  the core does not send `cmd_reload` or mute yet. Not checked: whether a plasmashell restart stacks its desktop above the wallpaper.
 
-### Phase 4 — Web wallpapers
+### Phase 4a — Web wallpapers: websites (done)
 
-- Web player; `LivelyProperties.json` customization panel; JavaScript API bridge.
-- Audio data through PipeWire, now-playing through MPRIS; URL and stream wallpapers.
+- Web player for local HTML wallpapers and websites, one per monitor, with WebGL, mouse input,
+  pause and volume.
+- Import an HTML file or a page folder; add a website address; thumbnails for web wallpapers.
+
+Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
+
+- Engine: QtWebEngine (Chromium) in `lively-player-web`, a small C++/Qt 6 program built with CMake
+  (`src/lively/lively.Player.Web`), the first part of the project that is not .NET. It was chosen
+  over WebKitGTK from .NET, CEF offscreen rendering and a PySide6 host, for Chromium's
+  compatibility with interactive websites and WebGL. `web`, `webaudio` and `url` wallpapers go to
+  it on Wayland; `videostream` and `picture` stay on the dummy player.
+- Surface: a full-window `WebEngineView` (QML) on a LayerShellQt `background` layer surface of its
+  output, namespace `lively-wallpaper`, anchored to all edges, exclusive zone -1, keyboard
+  interactivity none. Pointer input reaches the page; the keyboard never does.
+- Page: WebGL and accelerated 2D canvas on, media plays without a user gesture, local pages may
+  load remote and `file:` URLs, black background. Refused and logged: new windows, downloads, file,
+  color and authentication dialogs, the context menu, full screen, every permission request,
+  protocol handlers, client certificates and invalid server certificates. JavaScript dialogs are
+  dismissed.
+- Loaded: a local page sends `msg_wploaded` after its load and the first frame; a failed load
+  fails the player. A `url` wallpaper reports loaded as soon as its surface is shown and retries a
+  failed load every 15 s, so a wallpaper restored at login before the network is up recovers.
+- Pause: `cmd_suspend` grabs the current frame into a still image, hides the view, sets its
+  lifecycle state to `Frozen` and mutes it; `cmd_resume` reverses this. Chromium pauses the
+  `<video>`/`<audio>` elements of a frozen page and never plays them again, so a pause used to stop
+  a page's video and sound for good; a script in every frame (application world) now plays the
+  elements that were playing at the freeze again on resume. Volume: QtWebEngine has no per-page
+  volume, so `cmd_volume` 0 mutes and any other value unmutes.
+- Volume control: the Library page has a **Mute**/**Unmute** button and a 0-100 slider for
+  `WallpaperVolume` (read at start; written 300 ms after the last slider change, at once for the
+  button, through `GetSettings`/`SetSettings` so the other settings are kept). Unmute restores the
+  last level above 0, else 50. The default stays 0, so every wallpaper starts muted until the user
+  turns the volume up; this was the cause of "a YouTube wallpaper has no sound" on 2026-11-20.
+- Profiles: one QtWebEngine profile per display in `~/.cache/lively-wallpaper/WebEngine/<display>`
+  (`--web-profile`), so two players never share a storage path. Cookies and local storage persist
+  there. Qt Quick keeps its shader pipeline cache in `~/.cache/lively-wallpaper/lively-player-web`.
+- Console and log: the page's console goes to `msg_console` and the player log, limited to a burst
+  of 20 messages, then 5 per second, each cut at 4096 characters. After a load the player reports
+  the WebGL context and GL renderer, for example
+  `WebGL: webgl2, WebGL 2.0 (OpenGL ES 3.0 Chromium), renderer ANGLE (AMD, …)`. stdout carries only
+  protocol lines: the player keeps the original descriptor for them and points fd 1 at stderr, so
+  output of Chromium and the GL drivers cannot corrupt the protocol.
+- Import: `ImportWeb` copies an `.html`/`.htm` file alone, or a page folder with its subfolders
+  (entry `index.html`, else `index.htm`, else the only HTML file); the title comes from `<title>`.
+  A folder that already is a Lively web wallpaper keeps its `LivelyInfo.json`. Symbolic links are
+  not followed out of the folder. `AddUrl` adds an http(s) address as a `url` wallpaper; addresses
+  with a user name or password are refused. The UI has **Import…** (videos and HTML files),
+  **Import folder…** and **Add URL…**; file arguments and `Open` also take page files, folders and
+  http(s) addresses.
+- Thumbnails: when a web wallpaper from the library loads without a thumbnail (and the wallpapers
+  are not paused), the core sends `cmd_screenshot` (JPEG, 480 pixels wide, 3 s after the load).
+  On success it sets `Thumbnail` in `LivelyInfo.json` and sends the new `WallpaperUpdated` signal;
+  the UI reloads that tile. One request per folder at a time; a failed one is tried again the next
+  time the wallpaper starts.
+- Build: `lively.Player.Web.proj` (Microsoft.Build.NoTargets) runs CMake during `dotnet build`, and
+  the daemon, UI and tests copy the binary next to them. Without cmake, a C++ compiler or the Qt 6
+  WebEngine and LayerShellQt development packages, the build warns (`LIVELYWEB01`) and continues;
+  web wallpapers then fail with a message naming the packages. `-p:BuildWebPlayer=false` skips the
+  step. CI compiles the player in a Fedora container; the Ubuntu job takes the warning path
+  (Ubuntu 24.04 ships LayerShellQt for Qt 5 only).
+- Known limitations:
+  - One Chromium instance per monitor, a few hundred MB each.
+  - Mute and unmute only, no volume level.
+  - Media elements that are not in the document (`new Audio()` never attached) or sit in shadow
+    trees stay paused after a pause and resume; Web Audio resumes by itself.
+  - Sites with a cookie consent dialog (YouTube in the EU) keep their video paused until the choice
+    is clicked in the wallpaper; the choice is kept in the display's profile.
+  - Mouse only; the wallpaper never takes keyboard focus, so pages that need a login cannot be
+    signed into.
+  - Desktop icons and widgets are still covered on KDE, as in Phase 3, and a web wallpaper also
+    takes the mouse clicks meant for them. Plasma's desktop and the wallpaper are both
+    background-layer surfaces; KWin draws the one mapped last on top and a client cannot lower
+    itself. Accepted by the user for Phase 4a on 2026-11-20; see the option under Phase 7.
+  - Lively wallpapers with `LivelyProperties.json` load but cannot be customized, and audio
+    visualizers get no audio data, until Phase 4b.
+  - `mediump` precision: on Mesa/AMD, QtWebEngine's ANGLE uses the OpenGL ES backend and the
+    driver really runs `mediump` at reduced (16-bit) precision (`getShaderPrecisionFormat` reports
+    10 bits). Pages that rely on desktop Chrome treating `mediump` as `highp` can render wrongly;
+    changing the page's shader to `highp` fixes such a page. Tried without success: `QT_OPENGL=desktop`,
+    `QSG_RHI_BACKEND=vulkan`, `AMD_DEBUG=nofp16`, driconf `radeonsi_mediump=false`,
+    `--use-angle=gl`, `gl-egl` and `vulkan` (vulkan gives different artifacts), and
+    `--disable-angle-features=enablePrecisionQualifiers`.
+- Mouse input was checked by the user on 2026-11-20 (move, click, drag, wheel; no key events).
+  The view needs `activeFocusOnPress: true`: with false, QtWebEngine drops every mouse event
+  except the wheel on a window that never has focus.
+- Audio was checked on 2026-11-20 by the PipeWire stream (`application.name` `lively-player-web`,
+  node `lively-player-web`), not by ear: no stream while the player is muted from the start, a
+  running uncorked stream with signal after `cmd_volume` 50 (Web Audio oscillator, Opus `<audio>`,
+  `<audio>` in an iframe, and a YouTube page), the stream corked by `cmd_volume` 0 and by
+  `cmd_suspend`, and running again after `cmd_volume` 50 and `cmd_resume`. QtWebEngine 6.11.2 on
+  Fedora 44 reports H.264, AAC, HEVC, VP9, AV1, Opus and Vorbis as playable; YouTube served AV1 and
+  Opus.
+- Not verified: removal of an output while a page runs, compositors without layer-shell and
+  fractional scaling.
+
+### Phase 4b — Web wallpapers: Lively wallpapers
+
+- `LivelyProperties.json` customization panel.
+- JavaScript API bridge (`livelyPropertyListener` and the other upstream entry points).
+- Audio data for visualizers through PipeWire; now-playing through MPRIS.
+- `videostream` wallpapers.
+
+### Phase 4.5 — Span a web wallpaper across all monitors
+
+Decided on 2026-11-17; not part of Phase 4a.
+
+- One page rendered at the combined size of all monitors, with a window per monitor showing its
+  slice, as an extra launch mode of `lively-player-web`.
+- Mouse positions mapped back to the page.
+- A "span" arrangement in the core layout and a way to choose it in the UI.
+- Web wallpapers only.
 
 ### Phase 5 — Library and app features
 
@@ -179,6 +291,12 @@ Notes on what was built (details in [docs/ipc.md](docs/ipc.md)):
 - `lively-player-mpv` on other `wlr-layer-shell` compositors (Hyprland, Sway, COSMIC, niri):
   test and fix; GNOME Shell extension; X11.
 - Option: a Plasma wallpaper plugin as an icon-friendly KDE backend (could also ship in Phase 8).
+  For web wallpapers the preferred design (2026-11-20, to be revisited) keeps Chromium out of
+  plasmashell: the player renders offscreen and sends frames (shared memory first, then dmabuf
+  or PipeWire) to a thin wallpaper plugin, which sends mouse events back from a non-consuming
+  event filter. waywallen-display (MIT) does this and is the reference. Running the
+  `WebEngineView` inside plasmashell was rejected because a Chromium hang or crash would take
+  the desktop and panels with it.
 
 ### Phase 8 — Packaging and release
 

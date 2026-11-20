@@ -36,6 +36,8 @@ namespace lively.Core
             services.AddSingleton<IWallpaperService, WallpaperService>();
             // Video import into the library (needs ffmpeg/ffprobe on PATH at import time).
             services.AddSingleton(_ => new Library.VideoImporter(options.WallpapersDirectory));
+            // HTML pages and website addresses.
+            services.AddSingleton(_ => new Library.WebImporter(options.WallpapersDirectory));
             return services;
         }
 

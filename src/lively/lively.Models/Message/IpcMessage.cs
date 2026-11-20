@@ -59,6 +59,12 @@ namespace lively.Models.Message
         public string FilePath { get; set; }
         /// <summary>Delay in milliseconds before capture.</summary>
         public uint Delay { get; set; }
+        /// <summary>
+        /// Width in pixels to scale the capture down to, keeping the aspect ratio (never up); 0 = native size.
+        /// Not upstream: left out of the JSON when 0, a missing field reads as 0.
+        /// </summary>
+        [JsonProperty(DefaultValueHandling = DefaultValueHandling.Ignore)]
+        public uint Width { get; set; }
         public LivelyScreenshotCmd() : base(MessageType.cmd_screenshot) { }
     }
 

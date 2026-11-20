@@ -38,6 +38,8 @@ namespace lively.Ipc
 
         public event EventHandler<bool>? PausedChanged;
 
+        public event EventHandler<CoreWallpaperUpdatedEventArgs>? WallpaperUpdated;
+
         public async Task ConnectAsync(CancellationToken ct = default)
         {
             ObjectDisposedException.ThrowIf(disposed, this);
@@ -59,6 +61,10 @@ namespace lively.Ipc
             ct.ThrowIfCancellationRequested();
             watchers.Add(await proxy.WatchPausedChangedAsync(
                 paused => Post(() => PausedChanged?.Invoke(this, paused)),
+                emitOnCapturedContext: false).ConfigureAwait(false));
+            ct.ThrowIfCancellationRequested();
+            watchers.Add(await proxy.WatchWallpaperUpdatedAsync(
+                folder => Post(() => WallpaperUpdated?.Invoke(this, new CoreWallpaperUpdatedEventArgs(folder))),
                 emitOnCapturedContext: false).ConfigureAwait(false));
             connected = true;
         }
@@ -111,6 +117,18 @@ namespace lively.Ipc
         {
             ArgumentNullException.ThrowIfNull(path);
             return proxy.ImportVideoAsync(path);
+        }
+
+        public Task<string> ImportWebAsync(string path)
+        {
+            ArgumentNullException.ThrowIfNull(path);
+            return proxy.ImportWebAsync(path);
+        }
+
+        public Task<string> AddUrlAsync(string url)
+        {
+            ArgumentNullException.ThrowIfNull(url);
+            return proxy.AddUrlAsync(url);
         }
 
         public Task QuitAsync() => proxy.QuitAsync();

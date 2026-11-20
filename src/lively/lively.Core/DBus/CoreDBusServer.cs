@@ -19,19 +19,22 @@ namespace lively.Core.DBus
         private readonly IDisplayManager displayManager;
         private readonly ISettingsService settingsService;
         private readonly VideoImporter importer;
+        private readonly WebImporter webImporter;
         private readonly Action quit;
         private CoreDBusHandler? handler;
         private string? busName;
 
         /// <param name="quit">Called (on the thread pool) when a client calls Quit.</param>
         /// <param name="importer">Serves ImportVideo.</param>
+        /// <param name="webImporter">Serves ImportWeb and AddUrl.</param>
         public CoreDBusServer(IWallpaperService wallpaperService, IDisplayManager displayManager, ISettingsService settingsService,
-            VideoImporter importer, Action quit)
+            VideoImporter importer, WebImporter webImporter, Action quit)
         {
             this.wallpaperService = wallpaperService;
             this.displayManager = displayManager;
             this.settingsService = settingsService;
             this.importer = importer;
+            this.webImporter = webImporter;
             this.quit = quit;
         }
 
@@ -47,7 +50,7 @@ namespace lively.Core.DBus
                 throw new InvalidOperationException("The server is already started.");
             }
 
-            var h = new CoreDBusHandler(connection, Constants.DBus.CoreObjectPath, wallpaperService, displayManager, settingsService, importer, quit);
+            var h = new CoreDBusHandler(connection, Constants.DBus.CoreObjectPath, wallpaperService, displayManager, settingsService, importer, webImporter, quit);
             // The handler must be in place before the name is visible to clients.
             connection.AddMethodHandler(h);
             h.Attach();

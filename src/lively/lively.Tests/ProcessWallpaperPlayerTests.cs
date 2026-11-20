@@ -3,6 +3,7 @@ using lively.Common;
 using lively.Core;
 using lively.Core.Desktop;
 using lively.Core.Wallpapers;
+using lively.Models;
 using lively.Models.Message;
 // lively.Common has an unused upstream enum of the same name.
 using PlaybackState = lively.Core.Wallpapers.PlaybackState;
@@ -220,8 +221,8 @@ public class ProcessWallpaperPlayerTests
         using var tmp = new TempDirectory();
         var options = new CoreOptions { PlayerLogDirectory = tmp.Combine("logs") };
         var factory = new WallpaperPlayerFactory(options, WaylandBackend());
-        // Web wallpapers have no real player yet, also on Wayland.
-        var model = Core.Library.LibraryScanner.ScanFolder(WallpaperFixture.Create(tmp, "page", "Page", WallpaperType.web))!;
+        // Pictures have no real player yet, also on Wayland.
+        var model = Core.Library.LibraryScanner.ScanFolder(WallpaperFixture.Create(tmp, "picture", "Picture", WallpaperType.picture))!;
 
         using var player = factory.Create(model, DummyPlayer.Display("DP-2"), new PlaybackState(0, false));
         var console = new ConsoleRecorder(player);
@@ -230,13 +231,13 @@ public class ProcessWallpaperPlayerTests
 
         var started = console.Messages[0];
         Assert.Contains("--wallpaper-url " + model.FilePath, started);
-        Assert.Contains("--wallpaper-type web", started);
+        Assert.Contains("--wallpaper-type picture", started);
         Assert.Contains("--wallpaper-display DP-2", started);
         Assert.Contains("--wallpaper-geometry 1920x1080", started);
         Assert.Contains("--wallpaper-volume 0", started);
         Assert.Contains("--wallpaper-output DP-2", started);
         var log = File.ReadAllText(Path.Combine(options.PlayerLogDirectory, "player-dummy-DP-2.log"));
-        Assert.Contains("loaded " + model.FilePath + " (web) on DP-2 1920x1080", log);
+        Assert.Contains("loaded " + model.FilePath + " (picture) on DP-2 1920x1080", log);
         Assert.Contains("exiting: cmd_close", log);
     }
 
@@ -260,6 +261,77 @@ public class ProcessWallpaperPlayerTests
         Assert.Equal(Path.Combine(options.PlayerLogDirectory, "player-mpv-DP-2.log"), launch.Arguments[launch.Arguments.ToList().IndexOf("--mpv-log") + 1]);
         Assert.Equal("25", launch.Arguments[launch.Arguments.ToList().IndexOf("--wallpaper-volume") + 1]);
         Assert.Equal("DP-2", launch.Arguments[launch.Arguments.ToList().IndexOf("--wallpaper-output") + 1]);
+    }
+
+    [Theory]
+    [InlineData(WallpaperType.web)]
+    [InlineData(WallpaperType.webaudio)]
+    [InlineData(WallpaperType.url)]
+    public void Factory_WebOnWayland_UsesWebPlayer(WallpaperType type)
+    {
+        using var tmp = new TempDirectory();
+        // A stand-in for the player: the resolver accepts <name>.dll, and the factory only builds the launch.
+        var players = tmp.CreateDirectory("players");
+        File.WriteAllText(Path.Combine(players, WallpaperPlayerFactory.WebPlayerName + ".dll"), "");
+        var options = new CoreOptions
+        {
+            PlayerLogDirectory = tmp.Combine("logs"),
+            WebProfileDirectory = tmp.Combine("WebEngine"),
+            PlayerDirectory = players,
+        };
+        var factory = new WallpaperPlayerFactory(options, WaylandBackend());
+
+        using var player = Assert.IsType<ProcessWallpaperPlayer>(factory.Create(WebModel(tmp, type), DummyPlayer.Display("DP-2"), new PlaybackState(25, false)));
+
+        var args = player.Launch.Arguments.ToList();
+        Assert.Equal(Path.Combine(players, "lively-player-web.dll"), args[0]);
+        Assert.Equal(type.ToString(), args[args.IndexOf("--wallpaper-type") + 1]);
+        Assert.Equal(Path.Combine(options.PlayerLogDirectory, "player-web-DP-2.log"), args[args.IndexOf("--web-log") + 1]);
+        Assert.Equal(Path.Combine(options.WebProfileDirectory, "DP-2"), args[args.IndexOf("--web-profile") + 1]);
+        Assert.Equal("DP-2", args[args.IndexOf("--wallpaper-output") + 1]);
+        Assert.DoesNotContain("--mpv-log", args);
+        Assert.DoesNotContain("--dummy-log", args);
+    }
+
+    [Fact]
+    public void Factory_UrlOnWayland_PassesTheAddress()
+    {
+        using var tmp = new TempDirectory();
+        var players = tmp.CreateDirectory("players");
+        File.WriteAllText(Path.Combine(players, WallpaperPlayerFactory.WebPlayerName + ".dll"), "");
+        var factory = new WallpaperPlayerFactory(new CoreOptions { PlayerLogDirectory = tmp.Combine("logs"), PlayerDirectory = players }, WaylandBackend());
+
+        using var player = Assert.IsType<ProcessWallpaperPlayer>(factory.Create(WebModel(tmp, WallpaperType.url), DummyPlayer.Display(), new PlaybackState(0, false)));
+
+        var args = player.Launch.Arguments.ToList();
+        Assert.Equal("https://example.com/page", args[args.IndexOf("--wallpaper-url") + 1]);
+    }
+
+    [Fact]
+    public void Factory_MissingWebPlayer_SaysHowToBuildIt()
+    {
+        using var tmp = new TempDirectory();
+        var options = new CoreOptions { PlayerLogDirectory = tmp.Combine("logs"), PlayerDirectory = tmp.CreateDirectory("empty") };
+        var factory = new WallpaperPlayerFactory(options, WaylandBackend());
+
+        var e = Assert.Throws<WallpaperPlayerException>(() => factory.Create(WebModel(tmp, WallpaperType.web), DummyPlayer.Display(), new PlaybackState(0, false)));
+
+        Assert.Equal(WallpaperPlayerFactory.WebPlayerMissingMessage, e.Message);
+        Assert.Contains("lively-player-web", e.Message);
+        Assert.Contains("qt6-qtwebengine-devel layer-shell-qt-devel", e.Message);
+        Assert.IsType<FileNotFoundException>(e.InnerException);
+    }
+
+    [Fact]
+    public void Factory_MissingOtherPlayer_KeepsTheResolverMessage()
+    {
+        using var tmp = new TempDirectory();
+        var empty = tmp.CreateDirectory("empty");
+        var factory = new WallpaperPlayerFactory(new CoreOptions { PlayerLogDirectory = tmp.Combine("logs"), PlayerDirectory = empty }, WaylandBackend());
+
+        var e = Assert.Throws<WallpaperPlayerException>(() => factory.Create(DummyPlayer.Model(tmp), DummyPlayer.Display(), new PlaybackState(0, false)));
+
+        Assert.Equal($"Executable \"{WallpaperPlayerFactory.MpvPlayerName}\" was not found in {empty}.", e.Message);
     }
 
     [Fact]
@@ -287,6 +359,17 @@ public class ProcessWallpaperPlayerTests
         var factory = new WallpaperPlayerFactory(new CoreOptions(), new NullDesktopBackend(new DesktopSession(SessionType.Unknown, DesktopEnvironment.Unknown, null)));
 
         Assert.Throws<WallpaperPlayerException>(() => factory.Create(model, DummyPlayer.Display(), new PlaybackState(0, false)));
+    }
+
+    private static LibraryModel WebModel(TempDirectory tmp, WallpaperType type)
+    {
+        if (type == WallpaperType.url)
+        {
+            return new LibraryModel(new LivelyInfoModel { Title = "Site", Type = type, FileName = "https://example.com/page" }, tmp.CreateDirectory("site"));
+        }
+        var dir = tmp.CreateDirectory("page");
+        File.WriteAllText(Path.Combine(dir, "index.html"), "<html></html>");
+        return new LibraryModel(new LivelyInfoModel { Title = "Page", Type = type, FileName = "index.html" }, dir);
     }
 
     private static WaylandDesktopBackend WaylandBackend() =>
