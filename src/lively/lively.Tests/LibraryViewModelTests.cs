@@ -211,6 +211,147 @@ public sealed class LibraryViewModelTests : IDisposable
         Assert.False(vm.IsPaused);
     }
 
+    private async Task<LibraryViewModel> CreateConnectedAsync(TimeSpan volumeDebounce)
+    {
+        WallpaperFixture.Create(tmp, "rain", "Rain");
+        var vm = new LibraryViewModel(core, [tmp.Path], a => a(), volumeDebounce);
+        await vm.InitializeAsync();
+        return vm;
+    }
+
+    [Theory]
+    [InlineData(0, true, "Unmute")]
+    [InlineData(35, false, "Mute")]
+    public async Task Initialize_ReadsTheVolumeWithoutWritingIt(int volume, bool muted, string buttonText)
+    {
+        core.Settings.WallpaperVolume = volume;
+
+        var vm = await CreateConnectedAsync(TimeSpan.Zero);
+        await vm.VolumeWriteTask;
+
+        Assert.Equal(volume, vm.WallpaperVolume);
+        Assert.Equal(muted, vm.IsMuted);
+        Assert.Equal(buttonText, vm.MuteButtonText);
+        Assert.Empty(core.Calls);
+    }
+
+    [Fact]
+    public async Task WallpaperVolume_IsWrittenOnceAfterTheDebounceAndKeepsTheOtherSettings()
+    {
+        core.Settings = new SettingsModel { Language = "de-DE", Startup = true, IsFirstRun = true, WallpaperVolume = 0 };
+        var vm = await CreateConnectedAsync(TimeSpan.FromMilliseconds(200));
+        var notified = new List<string?>();
+        vm.PropertyChanged += (_, e) => notified.Add(e.PropertyName);
+
+        // A drag: many values in a row.
+        for (var v = 1; v <= 60; v++)
+        {
+            vm.WallpaperVolume = v;
+        }
+
+        Assert.Empty(core.Calls);
+        Assert.False(vm.IsMuted);
+        Assert.Equal("Mute", vm.MuteButtonText);
+        Assert.Contains(nameof(LibraryViewModel.MuteButtonText), notified);
+
+        await vm.VolumeWriteTask;
+
+        Assert.Equal([("SetSettings", "60", "")], core.Calls);
+        Assert.Equal(60, core.Settings.WallpaperVolume);
+        Assert.Equal("de-DE", core.Settings.Language);
+        Assert.True(core.Settings.Startup);
+        Assert.True(core.Settings.IsFirstRun);
+    }
+
+    [Fact]
+    public async Task WallpaperVolume_IsClampedAndAnUnchangedValueIsNotWritten()
+    {
+        core.Settings.WallpaperVolume = 100;
+        var vm = await CreateConnectedAsync(TimeSpan.Zero);
+
+        vm.WallpaperVolume = 150;
+        await vm.VolumeWriteTask;
+        vm.WallpaperVolume = -5;
+        await vm.VolumeWriteTask;
+
+        Assert.Equal(0, vm.WallpaperVolume);
+        Assert.Equal([("SetSettings", "0", "")], core.Calls);
+    }
+
+    [Fact]
+    public async Task ToggleMute_WritesAtOnceAndRestoresTheLastVolume()
+    {
+        core.Settings.WallpaperVolume = 40;
+        // A debounce far longer than the test: the toggle must not wait for it.
+        var vm = await CreateConnectedAsync(TimeSpan.FromMinutes(5));
+
+        await vm.ToggleMuteCommand.ExecuteAsync(null);
+
+        Assert.Equal(0, vm.WallpaperVolume);
+        Assert.True(vm.IsMuted);
+        Assert.Equal("Unmute", vm.MuteButtonText);
+        Assert.Equal([("SetSettings", "0", "")], core.Calls);
+
+        await vm.ToggleMuteCommand.ExecuteAsync(null);
+
+        Assert.Equal(40, vm.WallpaperVolume);
+        Assert.Equal(("SetSettings", "40", ""), core.Calls[^1]);
+    }
+
+    [Fact]
+    public async Task ToggleMute_FromAMutedStart_UsesTheDefaultVolume()
+    {
+        var vm = await CreateConnectedAsync(TimeSpan.FromMinutes(5));
+
+        await vm.ToggleMuteCommand.ExecuteAsync(null);
+
+        Assert.Equal(LibraryViewModel.DefaultUnmuteVolume, vm.WallpaperVolume);
+        Assert.Equal([("SetSettings", "50", "")], core.Calls);
+    }
+
+    [Fact]
+    public async Task ToggleMute_ReplacesAPendingSliderWrite()
+    {
+        core.Settings.WallpaperVolume = 20;
+        var vm = await CreateConnectedAsync(TimeSpan.FromMinutes(5));
+        vm.WallpaperVolume = 70;
+        var pending = vm.VolumeWriteTask;
+
+        await vm.ToggleMuteCommand.ExecuteAsync(null);
+        await pending;
+
+        Assert.Equal([("SetSettings", "0", "")], core.Calls);
+        await vm.ToggleMuteCommand.ExecuteAsync(null);
+        Assert.Equal(70, vm.WallpaperVolume);
+    }
+
+    [Fact]
+    public async Task WallpaperVolume_ClientError_GoesToStatusMessage()
+    {
+        var vm = await CreateConnectedAsync(TimeSpan.Zero);
+        core.CallError = new DBusErrorReplyException(CoreErrors.Failed, "daemon is shutting down");
+
+        vm.WallpaperVolume = 30;
+        await vm.VolumeWriteTask;
+
+        Assert.Equal("Could not change the volume: daemon is shutting down", vm.StatusMessage);
+        Assert.Equal(30, vm.WallpaperVolume);
+    }
+
+    [Fact]
+    public async Task WallpaperVolume_WithoutCore_IsNotWritten()
+    {
+        var vm = new LibraryViewModel(null, [tmp.Path], volumeDebounce: TimeSpan.Zero);
+        await vm.InitializeAsync();
+
+        vm.WallpaperVolume = 30;
+        await vm.ToggleMuteCommand.ExecuteAsync(null);
+
+        Assert.True(vm.VolumeWriteTask.IsCompleted);
+        Assert.Equal(0, vm.WallpaperVolume);
+        Assert.Equal(0, core.GetSettingsCalls);
+    }
+
     [Fact]
     public async Task ImportFiles_Video_CallsImportVideoAndAddsTheItem()
     {

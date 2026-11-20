@@ -14,7 +14,7 @@
   </UserControl.Resources>
 
   <DockPanel>
-    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" Margin="5,0,5,5">
+    <Grid DockPanel.Dock="Top" ColumnDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto,*" Margin="5,0,5,5">
       <TextBlock Grid.Column="0" Text="Display" VerticalAlignment="Center" Margin="0,0,8,0"/>
       <ComboBox Grid.Column="1" MinWidth="260"
                 ItemsSource="{Binding Displays}"
@@ -32,13 +32,22 @@
               Command="{Binding CloseAllWallpapersCommand}" IsEnabled="{Binding IsCoreAvailable}"/>
       <Button Grid.Column="4" Margin="8,0,0,0" Content="{Binding PauseButtonText}"
               Command="{Binding TogglePauseCommand}" IsEnabled="{Binding IsCoreAvailable}"/>
-      <Button Grid.Column="5" Margin="8,0,0,0" Content="Import…"
+      <StackPanel Grid.Column="5" Margin="8,0,0,0" Orientation="Horizontal" Spacing="6"
+                  IsEnabled="{Binding IsCoreAvailable}"
+                  ToolTip.Tip="Wallpaper volume. Video wallpapers play at this level; web wallpapers can only be muted (0) or play at full volume (any other level).">
+        <Button MinWidth="76" Content="{Binding MuteButtonText}" Command="{Binding ToggleMuteCommand}"/>
+        <Slider Width="110" VerticalAlignment="Center" Minimum="0" Maximum="100"
+                SmallChange="1" LargeChange="10" TickFrequency="1" IsSnapToTickEnabled="True"
+                Value="{Binding WallpaperVolume}"/>
+        <TextBlock MinWidth="24" VerticalAlignment="Center" Text="{Binding WallpaperVolume}"/>
+      </StackPanel>
+      <Button Grid.Column="6" Margin="8,0,0,0" Content="Import…"
               ToolTip.Tip="Import videos or web pages (.html, .htm)"
               Click="OnImportFilesClick" IsEnabled="{Binding IsCoreAvailable}"/>
-      <Button Grid.Column="6" Margin="8,0,0,0" Content="Import folder…"
+      <Button Grid.Column="7" Margin="8,0,0,0" Content="Import folder…"
               ToolTip.Tip="Import a web page folder (with index.html)"
               Click="OnImportFolderClick" IsEnabled="{Binding IsCoreAvailable}"/>
-      <Button Grid.Column="7" Margin="8,0,0,0" Content="Add URL…" x:Name="AddUrlButton"
+      <Button Grid.Column="8" Margin="8,0,0,0" Content="Add URL…" x:Name="AddUrlButton"
               ToolTip.Tip="Add a website as a wallpaper" IsEnabled="{Binding IsCoreAvailable}">
         <Button.Flyout>
           <Flyout Placement="BottomEdgeAlignedLeft" Opened="OnAddUrlFlyoutOpened">
@@ -50,7 +59,7 @@
           </Flyout>
         </Button.Flyout>
       </Button>
-      <TextBlock Grid.Column="8" Margin="12,0,0,0" VerticalAlignment="Center"
+      <TextBlock Grid.Column="9" Margin="12,0,0,0" VerticalAlignment="Center"
                  Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis"
                  ToolTip.Tip="{Binding StatusMessage}" Foreground="#BFFFFFFF"/>
     </Grid>

@@ -46,9 +46,27 @@ public sealed class FakeCoreClient : ICoreClient
 
     public Task CloseAllWallpapersAsync() => Record("CloseAllWallpapers");
 
-    public Task<SettingsModel> GetSettingsAsync() => Task.FromResult(new SettingsModel());
+    /// <summary>The core's settings: GetSettingsAsync returns a copy, SetSettingsAsync replaces them.</summary>
+    public SettingsModel Settings { get; set; } = new();
 
-    public Task SetSettingsAsync(SettingsModel settings) => Record("SetSettings");
+    /// <summary>Number of GetSettingsAsync calls.</summary>
+    public int GetSettingsCalls { get; private set; }
+
+    public Task<SettingsModel> GetSettingsAsync()
+    {
+        GetSettingsCalls++;
+        return Task.FromResult(Copy(Settings));
+    }
+
+    /// <summary>Recorded as ("SetSettings", WallpaperVolume, "").</summary>
+    public async Task SetSettingsAsync(SettingsModel settings)
+    {
+        await Record("SetSettings", settings.WallpaperVolume.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Settings = Copy(settings);
+    }
+
+    private static SettingsModel Copy(SettingsModel settings) =>
+        Newtonsoft.Json.JsonConvert.DeserializeObject<SettingsModel>(Newtonsoft.Json.JsonConvert.SerializeObject(settings))!;
 
     public Task SetPausedAsync(bool paused) => Record("SetPaused", paused.ToString());
 
