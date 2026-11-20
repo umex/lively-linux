@@ -98,6 +98,10 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(handleQtMessage);
 
     qputenv("QT_QPA_PLATFORM", "wayland");
+    // The surface never has keyboard focus, so an input method is of no use. Without this, a click on a text
+    // field in the page sends text-input show_input_panel, which KWin honours for whatever window is focused.
+    // "compose" (dead keys only) keeps Qt from using text-input at all.
+    qputenv("QT_IM_MODULES", "compose");
     QCoreApplication::setApplicationName(u"lively-player-web"_s);
     QCoreApplication::setOrganizationName(u"lively-wallpaper"_s);
     // Before the application object: sets up context sharing and the graphics API for Chromium.

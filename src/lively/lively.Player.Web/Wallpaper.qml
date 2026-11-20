@@ -90,7 +90,11 @@ Window {
         profile: root.profile
         backgroundColor: "black"
         audioMuted: root.player.muted || root.player.suspended
-        activeFocusOnPress: false
+        // Must stay true: with false, QtWebEngine drops every mouse press, move, release, hover and touch
+        // event unless the view has active focus, which a window that is never the focus window does not get.
+        // Wheel events are not affected. A press only moves Qt's focus inside this window; the surface never
+        // gets keyboard focus (keyboard interactivity none, Qt.WindowDoesNotAcceptFocus).
+        activeFocusOnPress: true
 
         settings.webGLEnabled: true
         settings.accelerated2dCanvasEnabled: true
